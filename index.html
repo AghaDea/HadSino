@@ -210,6 +210,12 @@ nav.tabbar button.active .ic{color:var(--accent);}
 .chat-input-row input[type=text]{flex:1; background:var(--bg-elev); border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:999px; font-size:14px; outline:none;}
 .chat-input-row input[type=text]:focus{border-color:var(--accent);}
 .chat-send-btn{background:var(--accent); color:#fff; border:none; width:38px; height:38px; border-radius:50%; font-size:16px; flex-shrink:0;}
+.unread-badge{
+  background:var(--accent); color:#fff; font-size:11px; font-weight:800; min-width:20px; height:20px;
+  padding:0 6px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+  margin-inline-start:auto; flex-shrink:0; transition:opacity .3s ease, transform .3s ease; opacity:1; transform:scale(1);
+}
+.unread-badge.hide{opacity:0; transform:scale(.4); pointer-events:none;}
 </style>
 </head>
 <body>
@@ -945,10 +951,23 @@ let chatReplyTarget = null;    // پیامی که در حال پاسخ به آن
 let chatMsgMap = {};           // id -> message row (برای نمایش نقل قول)
 let chatChannelSubscribed = false;
 let pendingChatImage = null;
+let unreadCounts = {};         // senderId -> تعداد پیام‌های خوانده‌نشده از آن کاربر
 
 $('chatSearch').oninput = ()=> loadChatUsers();
 
+async function loadUnreadCounts(){
+  const { data, error } = await sb.from('messages')
+    .select('sender_id')
+    .eq('receiver_id', CURRENT_USER.id)
+    .eq('is_read', false);
+  unreadCounts = {};
+  if(!error && data){
+    data.forEach(r=>{ unreadCounts[r.sender_id] = (unreadCounts[r.sender_id] || 0) + 1; });
+  }
+}
+
 async function loadChatUsers(){
+  await loadUnreadCounts();
   const search = $('chatSearch').value.trim();
   let query = sb.from('users').select('*').neq('id', CURRENT_USER.id).order('username',{ascending:true}).limit(200);
   if(search) query = query.ilike('username', `%${search}%`);
@@ -962,9 +981,11 @@ async function loadChatUsers(){
   rows.forEach((u, idx)=>{
     const row = document.createElement('div');
     row.className = 'lb-row';
+    const count = unreadCounts[u.id] || 0;
     row.innerHTML = `
       <div class="avatar sm" id="chatAv${idx}"></div>
       <div class="lb-name"><div class="u">${escapeHtml(u.username)}</div></div>
+      <span class="unread-badge ${count > 0 ? '' : 'hide'}" id="unreadBadge-${u.id}">${count}</span>
     `;
     row.onclick = ()=> openConversation(u);
     list.appendChild(row);
@@ -977,13 +998,23 @@ function ensureChatRealtime(){
   sb.channel('messages-realtime')
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' }, payload=>{
       const m = payload.new;
-      if(!chatPartner || $('chatConversation').classList.contains('hidden')) return;
-      const involvesConvo = (m.sender_id===CURRENT_USER.id && m.receiver_id===chatPartner.id) || (m.sender_id===chatPartner.id && m.receiver_id===CURRENT_USER.id);
-      if(!involvesConvo) return;
       if(m.sender_id === CURRENT_USER.id) return; // قبلا خودمان لوکال اضافه کردیم
-      chatMsgMap[m.id] = m;
-      appendMessageBubble(m);
-      scrollChatToBottom();
+      if(m.receiver_id !== CURRENT_USER.id) return; // به ما مربوط نیست
+
+      const convoOpen = chatPartner && m.sender_id === chatPartner.id && !$('chatConversation').classList.contains('hidden');
+      if(convoOpen){
+        chatMsgMap[m.id] = m;
+        appendMessageBubble(m);
+        scrollChatToBottom();
+        sb.from('messages').update({ is_read:true }).eq('id', m.id);
+      } else {
+        unreadCounts[m.sender_id] = (unreadCounts[m.sender_id] || 0) + 1;
+        const badge = document.getElementById('unreadBadge-' + m.sender_id);
+        if(badge){
+          badge.textContent = unreadCounts[m.sender_id];
+          badge.classList.remove('hide');
+        }
+      }
     })
     .on('postgres_changes', { event:'DELETE', schema:'public', table:'messages' }, payload=>{
       const old = payload.old;
@@ -1019,6 +1050,19 @@ async function openConversation(user){
   }
   scrollChatToBottom();
   ensureChatRealtime();
+
+  // پیام‌های این کاربر را خوانده‌شده علامت بزن و شمارنده را صفر/محو کن
+  await sb.from('messages')
+    .update({ is_read:true })
+    .eq('sender_id', user.id)
+    .eq('receiver_id', CURRENT_USER.id)
+    .eq('is_read', false);
+  unreadCounts[user.id] = 0;
+  const badge = document.getElementById('unreadBadge-' + user.id);
+  if(badge){
+    badge.textContent = '0';
+    badge.classList.add('hide');
+  }
 }
 
 function closeConversation(){
