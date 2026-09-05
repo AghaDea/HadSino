@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>حدسینو | حدس عدد</title>
+<title>Guessino | Number Guess</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
@@ -24,7 +24,7 @@
 html,body{height:100%;}
 body{
   margin:0; background:var(--bg); color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Vazirmatn,Tahoma,sans-serif;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,sans-serif;
   min-height:100vh; display:flex; flex-direction:column;
 }
 button{font-family:inherit; cursor:pointer;}
@@ -88,7 +88,7 @@ nav.tabbar button.active .ic{color:var(--accent);}
 .ban-card .icon{font-size:52px; margin-bottom:14px;}
 .ban-card h2{color:var(--red); margin:0 0 10px;}
 .ban-card p{color:var(--text-dim); line-height:1.9; font-size:14px;}
-.ban-card .box{background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; padding:14px; margin:16px 0; text-align:right;}
+.ban-card .box{background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; padding:14px; margin:16px 0; text-align:left;}
 .ban-card .box div{margin-bottom:6px; font-size:13px;}
 .ban-card .box b{color:var(--text);}
 
@@ -197,7 +197,7 @@ nav.tabbar button.active .ic{color:var(--accent);}
 .msg{max-width:78%; padding:8px 10px; border-radius:14px; position:relative; font-size:14px; line-height:1.6; word-wrap:break-word; overflow-wrap:anywhere;}
 .msg.mine{align-self:flex-start; background:var(--green); color:#fff; border-bottom-right-radius:4px;}
 .msg.theirs{align-self:flex-end; background:var(--accent); color:#fff; border-bottom-left-radius:4px;}
-.msg-quote{background:rgba(0,0,0,.22); border-right:3px solid rgba(255,255,255,.65); padding:5px 8px; border-radius:8px; margin-bottom:6px; font-size:12px; opacity:.9;}
+.msg-quote{background:rgba(0,0,0,.22); border-left:3px solid rgba(255,255,255,.65); padding:5px 8px; border-radius:8px; margin-bottom:6px; font-size:12px; opacity:.9;}
 .msg-img{max-width:100%; border-radius:10px; margin-bottom:6px; display:block;}
 .msg-text{white-space:pre-wrap;}
 .msg-actions{display:flex; gap:10px; margin-top:4px; opacity:.85; font-size:12px; cursor:pointer;}
@@ -224,27 +224,27 @@ nav.tabbar button.active .ic{color:var(--accent);}
 
   <!-- ============ SETUP WARNING (shown if supabase not configured) ============ -->
   <div id="setupWarning" class="setup-warning hidden">
-    خوبی؟</div>
+    You good?</div>
 
   <!-- ============ AUTH SCREEN ============ -->
   <div id="authScreen" class="auth-wrap hidden">
     <div class="auth-card">
-      <div class="auth-logo">حدس<span>ینو</span></div>
-      <div class="auth-sub" id="authSub">برای ورود فرم را پر کنید.</div>
+      <div class="auth-logo">Guess<span>ino</span></div>
+      <div class="auth-sub" id="authSub">Fill out the form to log in.</div>
       <div id="authError" class="err-msg hidden"></div>
 
       <div class="field">
-        <label>نام کاربری</label>
-        <input id="authUsername" maxlength="16" placeholder="بین ۲ تا ۱۶ کاراکتر">
+        <label>Username</label>
+        <input id="authUsername" maxlength="16" placeholder="Between 2 and 16 characters">
       </div>
       <div class="field">
-        <label>رمز عبور</label>
-        <input id="authPassword" type="password" maxlength="15" placeholder="بین ۳ تا ۱۵ کاراکتر">
+        <label>Password</label>
+        <input id="authPassword" type="password" maxlength="15" placeholder="Between 3 and 15 characters">
       </div>
 
-      <button class="btn btn-primary" id="authSubmitBtn">ورود</button>
+      <button class="btn btn-primary" id="authSubmitBtn">Log In</button>
       <div class="switch-line" id="authSwitchLine">
-        حساب نداری؟ <a id="authSwitchLink">ثبت‌نام کن</a>
+        Don't have an account? <a id="authSwitchLink">Sign up</a>
       </div>
     </div>
   </div>
@@ -253,21 +253,21 @@ nav.tabbar button.active .ic{color:var(--accent);}
   <div id="banScreen" class="ban-wrap hidden">
     <div class="ban-card">
       <div class="icon">🚫</div>
-      <h2>دسترسی شما محدود شده</h2>
-      <p>حساب یا دستگاه شما توسط مدیریت مسدود شده و امکان استفاده از برنامه وجود ندارد.</p>
+      <h2>Your access has been restricted</h2>
+      <p>Your account or device has been blocked by an admin and you cannot use the app.</p>
       <div class="box">
-        <div>نوع محدودیت: <b id="banTypeText">-</b></div>
-        <div>دلیل: <b id="banReasonText">-</b></div>
-        <div>تا تاریخ: <b id="banUntilText">-</b></div>
+        <div>Restriction type: <b id="banTypeText">-</b></div>
+        <div>Reason: <b id="banReasonText">-</b></div>
+        <div>Until: <b id="banUntilText">-</b></div>
       </div>
-      <button class="btn btn-ghost" id="banLogoutBtn">خروج از حساب</button>
+      <button class="btn btn-ghost" id="banLogoutBtn">Log Out</button>
     </div>
   </div>
 
   <!-- ============ MAIN APP ============ -->
   <div id="mainApp" class="hidden">
     <header class="topbar">
-      <div class="brand"><span class="dot"></span> حدسینو</div>
+      <div class="brand"><span class="dot"></span> Guessino</div>
       <div style="font-size:12px; color:var(--text-dim);" id="topbarUser"></div>
     </header>
 
@@ -279,7 +279,7 @@ nav.tabbar button.active .ic{color:var(--accent);}
             <div class="avatar" id="gameAvatar">?</div>
             <div class="name-block" style="flex:1;">
               <div class="uname" id="gameUname">-</div>
-              <div class="lvl">لول <span id="gameLevel">1</span></div>
+              <div class="lvl">Level <span id="gameLevel">1</span></div>
               <div class="xp-bar-wrap">
                 <div class="xp-bar"><i id="gameXpBar" style="width:0%"></i></div>
                 <div class="xp-text"><span id="gameXpText">0/50</span> XP</div>
@@ -288,15 +288,15 @@ nav.tabbar button.active .ic{color:var(--accent);}
           </div>
 
           <div class="range-hint">(0/500000)</div>
-          <div class="guess-display empty" id="guessDisplay">عدد را با دکمه‌های زیر وارد کن</div>
+          <div class="guess-display empty" id="guessDisplay">Enter the number using the buttons below</div>
           <div class="result-label" id="resultLabel"></div>
 
           <div class="keypad" id="keypad"></div>
 
           <div class="stats-mini">
-            <div><b id="statThisGuesses">0</b><span>حدس این دور</span></div>
-            <div><b id="statTotalWins">0</b><span>کل بردها</span></div>
-            <div><b id="statTotalGuesses">0</b><span>کل حدس‌ها</span></div>
+            <div><b id="statThisGuesses">0</b><span>This round's guesses</span></div>
+            <div><b id="statTotalWins">0</b><span>Total wins</span></div>
+            <div><b id="statTotalGuesses">0</b><span>Total guesses</span></div>
           </div>
         </div>
       </section>
@@ -304,11 +304,11 @@ nav.tabbar button.active .ic{color:var(--accent);}
       <!-- ---- LEADERBOARD PAGE ---- -->
       <section id="pageLeaderboard" class="hidden">
         <div class="lb-tabs">
-          <button id="tabGlobal" class="active">جهانی</button>
-          <button id="tabWeekly">این هفته</button>
+          <button id="tabGlobal" class="active">Global</button>
+          <button id="tabWeekly">This Week</button>
         </div>
         <div class="search-wrap">
-          <input id="lbSearch" placeholder="جستجوی نام کاربر...">
+          <input id="lbSearch" placeholder="Search username...">
         </div>
         <div class="card" style="padding:6px 12px;">
           <div id="lbList"></div>
@@ -319,34 +319,34 @@ nav.tabbar button.active .ic{color:var(--accent);}
       <section id="pageProfile" class="hidden">
         <div class="profile-hero">
           <div class="avatar lg" id="profAvatar">?</div>
-          <div class="upload-btn" id="avatarUploadLabel">تغییر عکس پروفایل</div>
+          <div class="upload-btn" id="avatarUploadLabel">Change profile picture</div>
           <input type="file" id="avatarUpload" accept="image/*" class="hidden">
-          <h3 id="profUname">- <span class="admin-badge hidden" id="profAdminBadge">ادمین</span></h3>
-          <div style="color:var(--text-dim); font-size:12px;">لول <span id="profLevel">1</span> · <span id="profXpText">0/50</span> XP</div>
+          <h3 id="profUname">- <span class="admin-badge hidden" id="profAdminBadge">Admin</span></h3>
+          <div style="color:var(--text-dim); font-size:12px;">Level <span id="profLevel">1</span> · <span id="profXpText">0/50</span> XP</div>
         </div>
 
         <div class="stat-grid">
-          <div class="box"><b id="profWins">0</b><span>کل بردها</span></div>
-          <div class="box"><b id="profGuesses">0</b><span>کل حدس‌ها</span></div>
-          <div class="box"><b id="profCrowns">0 👑</b><span>قهرمانی هفته</span></div>
+          <div class="box"><b id="profWins">0</b><span>Total wins</span></div>
+          <div class="box"><b id="profGuesses">0</b><span>Total guesses</span></div>
+          <div class="box"><b id="profCrowns">0 👑</b><span>Weekly championships</span></div>
         </div>
 
-        <div class="section-title">ویرایش نام کاربری</div>
+        <div class="section-title">Edit username</div>
         <div class="field"><input id="editUsername" maxlength="16"></div>
-        <button class="btn btn-ghost" id="saveUsernameBtn">ذخیره نام</button>
+        <button class="btn btn-ghost" id="saveUsernameBtn">Save name</button>
 
-        <div class="section-title">تغییر رمز عبور</div>
-        <div class="field"><input id="editPassword" type="password" maxlength="15" placeholder="رمز جدید (۳ تا ۱۵ کاراکتر)"></div>
-        <button class="btn btn-ghost" id="savePasswordBtn">ذخیره رمز</button>
+        <div class="section-title">Change password</div>
+        <div class="field"><input id="editPassword" type="password" maxlength="15" placeholder="New password (3 to 15 characters)"></div>
+        <button class="btn btn-ghost" id="savePasswordBtn">Save password</button>
 
-        <div class="section-title">حساب کاربری</div>
-        <button class="btn btn-primary" id="logoutBtn" style="background:var(--red);">خروج از حساب</button>
+        <div class="section-title">Account</div>
+        <button class="btn btn-primary" id="logoutBtn" style="background:var(--red);">Log Out</button>
       </section>
 
       <!-- ---- CHAT PAGE (user list) ---- -->
       <section id="pageChat" class="hidden">
         <div class="search-wrap">
-          <input id="chatSearch" placeholder="جستجوی کاربر...">
+          <input id="chatSearch" placeholder="Search user...">
         </div>
         <div class="card" style="padding:6px 12px;">
           <div id="chatUserList"></div>
@@ -355,10 +355,10 @@ nav.tabbar button.active .ic{color:var(--accent);}
     </main>
 
     <nav class="tabbar">
-      <button id="navProfile"><span class="ic">👤</span>پروفایل</button>
-      <button id="navChat"><span class="ic">💬</span>چت</button>
-      <button id="navLeaderboard"><span class="ic">🏆</span>لیدربورد</button>
-      <button id="navGame" class="active"><span class="ic">🎯</span>بازی</button>
+      <button id="navGame" class="active"><span class="ic">🎯</span>Game</button>
+      <button id="navLeaderboard"><span class="ic">🏆</span>Leaderboard</button>
+      <button id="navChat"><span class="ic">💬</span>Chat</button>
+      <button id="navProfile"><span class="ic">👤</span>Profile</button>
     </nav>
   </div>
 </div>
@@ -370,33 +370,33 @@ nav.tabbar button.active .ic{color:var(--accent);}
     <div style="text-align:center;">
       <div class="avatar lg" id="modalAvatar" style="margin:0 auto 10px;">?</div>
       <h3 style="margin-bottom:2px;" id="modalUname">-</h3>
-      <span class="admin-badge hidden" id="modalAdminBadge">ادمین</span>
+      <span class="admin-badge hidden" id="modalAdminBadge">Admin</span>
     </div>
     <div style="margin-top:16px;">
-      <div class="detail-row"><span>وضعیت</span><span id="modalStatus">-</span></div>
-      <div class="detail-row"><span>لول</span><span id="modalLevel">-</span></div>
+      <div class="detail-row"><span>Status</span><span id="modalStatus">-</span></div>
+      <div class="detail-row"><span>Level</span><span id="modalLevel">-</span></div>
       <div class="detail-row"><span>XP</span><span id="modalXp">-</span></div>
-      <div class="detail-row"><span>کل بردها</span><span id="modalWins">-</span></div>
-      <div class="detail-row"><span>کل حدس‌ها</span><span id="modalGuesses">-</span></div>
-      <div class="detail-row"><span>قهرمانی‌های هفته</span><span id="modalCrowns">-</span></div>
-      <div class="detail-row"><span>آخرین بازدید</span><span id="modalLastOnline">-</span></div>
-      <div class="detail-row"><span>آخرین برد</span><span id="modalLastWin">-</span></div>
+      <div class="detail-row"><span>Total wins</span><span id="modalWins">-</span></div>
+      <div class="detail-row"><span>Total guesses</span><span id="modalGuesses">-</span></div>
+      <div class="detail-row"><span>Weekly championships</span><span id="modalCrowns">-</span></div>
+      <div class="detail-row"><span>Last seen</span><span id="modalLastOnline">-</span></div>
+      <div class="detail-row"><span>Last win</span><span id="modalLastWin">-</span></div>
     </div>
 
     <div id="adminBanSection" class="hidden">
       <div class="ban-actions">
-        <button class="btn-ban-device" id="btnBanDevice">بن دیوایس</button>
-        <button class="btn-ban-normal" id="btnBanNormal">بن موقت/معمولی</button>
+        <button class="btn-ban-device" id="btnBanDevice">Ban device</button>
+        <button class="btn-ban-normal" id="btnBanNormal">Temp/normal ban</button>
       </div>
-      <button class="btn-unban hidden" id="btnUnban" style="width:100%; margin-top:8px; padding:10px; border-radius:10px; border:none; font-weight:700;">رفع مسدودیت</button>
+      <button class="btn-unban hidden" id="btnUnban" style="width:100%; margin-top:8px; padding:10px; border-radius:10px; border:none; font-weight:700;">Unban</button>
 
       <div id="banForm" class="mini-form hidden">
-        <input type="text" id="banReasonInput" placeholder="دلیل مسدودسازی">
+        <input type="text" id="banReasonInput" placeholder="Ban reason">
         <div id="banUntilWrap">
-          <label style="font-size:11px; color:var(--text-dim);">مسدود تا تاریخ (خالی = دائمی)</label>
+          <label style="font-size:11px; color:var(--text-dim);">Banned until (empty = permanent)</label>
           <input type="datetime-local" id="banUntilInput">
         </div>
-        <button class="btn btn-primary" id="confirmBanBtn" style="margin-top:6px;">تایید مسدودسازی</button>
+        <button class="btn btn-primary" id="confirmBanBtn" style="margin-top:6px;">Confirm ban</button>
       </div>
     </div>
   </div>
@@ -405,14 +405,14 @@ nav.tabbar button.active .ic{color:var(--accent);}
 <!-- ============ CHAT CONVERSATION OVERLAY ============ -->
 <div id="chatConversation" class="chat-convo hidden">
   <header class="chat-convo-header">
-    <button id="chatBackBtn" class="chat-back">→</button>
+    <button id="chatBackBtn" class="chat-back">←</button>
     <div class="avatar sm" id="convoAvatar">?</div>
     <div class="convo-name" id="convoName">-</div>
   </header>
   <div class="chat-messages" id="chatMessages"></div>
   <div id="replyBar" class="reply-bar hidden">
     <div>
-      <div class="reply-bar-label">پاسخ به <span id="replyBarName"></span></div>
+      <div class="reply-bar-label">Replying to <span id="replyBarName"></span></div>
       <div class="reply-bar-text" id="replyBarText"></div>
     </div>
     <button id="cancelReplyBtn">✕</button>
@@ -420,7 +420,7 @@ nav.tabbar button.active .ic{color:var(--accent);}
   <div class="chat-input-row">
     <label for="chatImageInput" class="chat-icon-btn">📷</label>
     <input type="file" id="chatImageInput" accept="image/*" class="hidden">
-    <input type="text" id="chatTextInput" placeholder="پیام...">
+    <input type="text" id="chatTextInput" placeholder="Message...">
     <button id="chatSendBtn" class="chat-send-btn">➤</button>
   </div>
 </div>
@@ -429,7 +429,7 @@ nav.tabbar button.active .ic{color:var(--accent);}
 
 <script>
 /* =====================================================================
-   CONFIG — این دو مقدار را از پروژه Supabase خودتان جایگزین کنید
+   CONFIG — Replace these two values with your own Supabase project's values
    ===================================================================== */
 const SUPABASE_URL = "https://qgdyocpjsarcaqpkjtft.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_TY7KDL3ZjRLrwEnjRNKALA_8t3rDD2i";
@@ -477,7 +477,7 @@ function renderAvatar(el, user){
 function fmtDate(d){
   if(!d) return '—';
   const dt = new Date(d);
-  return dt.toLocaleDateString('fa-IR') + ' ' + dt.toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit'});
+  return dt.toLocaleDateString('en-US') + ' ' + dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
 }
 function levelXpNeeded(level){ return 50 + (level-1)*25; }
 
@@ -517,17 +517,17 @@ async function boot(){
 function showDeviceBanScreen(devBan){
   hideAllScreens();
   $('banScreen').classList.remove('hidden');
-  $('banTypeText').textContent = 'مسدودسازی دستگاه';
-  $('banReasonText').textContent = devBan.reason || 'بدون دلیل ثبت شده';
-  $('banUntilText').textContent = devBan.banned_until ? fmtDate(devBan.banned_until) : 'دائمی';
+  $('banTypeText').textContent = 'Device ban';
+  $('banReasonText').textContent = devBan.reason || 'No reason recorded';
+  $('banUntilText').textContent = devBan.banned_until ? fmtDate(devBan.banned_until) : 'Permanent';
 }
 
 function showUserBanScreen(user){
   hideAllScreens();
   $('banScreen').classList.remove('hidden');
-  $('banTypeText').textContent = user.ban_type === 'device' ? 'مسدودسازی دستگاه' : 'مسدودسازی حساب';
-  $('banReasonText').textContent = user.ban_reason || 'بدون دلیل ثبت شده';
-  $('banUntilText').textContent = user.ban_until ? fmtDate(user.ban_until) : 'دائمی';
+  $('banTypeText').textContent = user.ban_type === 'device' ? 'Device ban' : 'Account ban';
+  $('banReasonText').textContent = user.ban_reason || 'No reason recorded';
+  $('banUntilText').textContent = user.ban_until ? fmtDate(user.ban_until) : 'Permanent';
 }
 
 function hideAllScreens(){
@@ -545,19 +545,19 @@ function showAuth(mode){
   authMode = mode;
   $('authScreen').classList.remove('hidden');
   $('authError').classList.add('hidden');
-  $('authSubmitBtn').textContent = mode === 'login' ? 'ورود' : 'ثبت‌نام';
+  $('authSubmitBtn').textContent = mode === 'login' ? 'Log In' : 'Sign Up';
   $('authSwitchLine').innerHTML = mode === 'login'
-    ? 'حساب نداری؟ <a id="authSwitchLink">ثبت‌نام کن</a>'
-    : 'حساب داری؟ <a id="authSwitchLink">وارد شو</a>';
+    ? 'Don\'t have an account? <a id="authSwitchLink">Sign up</a>'
+    : 'Already have an account? <a id="authSwitchLink">Log in</a>';
   $('authSwitchLink').onclick = ()=> showAuth(mode === 'login' ? 'signup' : 'login');
 }
 
 function validateUsername(u){
-  if(u.length < 2 || u.length > 16) return 'نام کاربری باید بین ۲ تا ۱۶ کاراکتر باشد';
+  if(u.length < 2 || u.length > 16) return 'Username must be between 2 and 16 characters';
   return null;
 }
 function validatePassword(p){
-  if(p.length < 3 || p.length > 15) return 'رمز عبور باید بین ۳ تا ۱۵ کاراکتر باشد';
+  if(p.length < 3 || p.length > 15) return 'Password must be between 3 and 15 characters';
   return null;
 }
 
@@ -582,7 +582,7 @@ $('authSubmitBtn').onclick = async ()=>{
 
   $('authSubmitBtn').disabled = true;
   try{
-    // دستگاه مسدود نباید بتواند نه ثبت‌نام کند نه وارد هیچ اکانتی شود
+    // A banned device must not be able to sign up or log into any account
     const devBan = await getActiveDeviceBan();
     if(devBan){
       showDeviceBanScreen(devBan);
@@ -594,24 +594,24 @@ $('authSubmitBtn').onclick = async ()=>{
 
     if(authMode === 'signup'){
       const { data: exists } = await sb.from('users').select('id').eq('username_lower', lower).maybeSingle();
-      if(exists){ throw new Error('این نام کاربری قبلا استفاده شده (حروف بزرگ/کوچک فرقی ندارد)'); }
+      if(exists){ throw new Error('This username is already taken (case-insensitive)'); }
       const { data: newUser, error } = await sb.from('users').insert({
         username, password_hash: hash, device_id: DEVICE_ID
       }).select().single();
       if(error){
-        if(error.code === '23505') throw new Error('این نام کاربری قبلا استفاده شده');
+        if(error.code === '23505') throw new Error('This username is already taken');
         throw error;
       }
       localStorage.setItem('gz_user_id', newUser.id);
       await enterSession(newUser);
     } else {
       const { data: user } = await sb.from('users').select('*').eq('username_lower', lower).maybeSingle();
-      if(!user || user.password_hash !== hash){ throw new Error('نام کاربری یا رمز عبور اشتباه است'); }
+      if(!user || user.password_hash !== hash){ throw new Error('Incorrect username or password'); }
       localStorage.setItem('gz_user_id', user.id);
       await enterSession(user);
     }
   }catch(e){
-    errBox.textContent = e.message || 'خطایی رخ داد';
+    errBox.textContent = e.message || 'An error occurred';
     errBox.classList.remove('hidden');
   }finally{
     $('authSubmitBtn').disabled = false;
@@ -669,8 +669,8 @@ $('navChat').onclick = ()=> goPage('chat');
    ===================================================================== */
 function buildKeypad(){
   const wrap = $('keypad'); wrap.innerHTML = '';
-  // ترتیب: 1 2 3 / 4 5 6 / 7 8 9 / Set 0 Clear
-  const layout = ['3','2','1','6','5','4','9','8','7','Set','0','Clear'];
+  // Order: 1 2 3 / 4 5 6 / 7 8 9 / Set 0 Clear
+  const layout = ['1','2','3','4','5','6','7','8','9','Clear','0','Set'];
   layout.forEach(k=>{
     const b = document.createElement('button');
     b.textContent = k;
@@ -687,7 +687,7 @@ function buildKeypad(){
 function renderTypedDigits(){
   const disp = $('guessDisplay');
   if(!typedDigits){
-    disp.textContent = 'عدد را با دکمه‌های زیر وارد کن';
+    disp.textContent = 'Enter the number using the buttons below';
     disp.classList.add('empty');
   } else {
     disp.textContent = Number(typedDigits).toLocaleString('en-US');
@@ -707,9 +707,9 @@ function startNewRound(){
 }
 
 async function submitGuess(){
-  if(!typedDigits){ toast('یک عدد وارد کن'); return; }
+  if(!typedDigits){ toast('Enter a number'); return; }
   const guess = Number(typedDigits);
-  if(guess < 0 || guess > 500000){ toast('عدد باید بین ۰ تا ۵۰۰,۰۰۰ باشد'); return; }
+  if(guess < 0 || guess > 500000){ toast('Number must be between 0 and 500,000'); return; }
 
   currentGuessCount++;
   $('statThisGuesses').textContent = currentGuessCount;
@@ -788,7 +788,7 @@ async function loadLeaderboard(){
   const list = $('lbList');
   list.innerHTML = '';
   if(error || !rows || rows.length === 0){
-    list.innerHTML = `<div class="empty-note">${lbMode==='weekly' ? 'هنوز کسی این هفته بازی نکرده' : 'کاربری یافت نشد'}</div>`;
+    list.innerHTML = `<div class="empty-note">${lbMode==='weekly' ? 'No one has played this week yet' : 'No user found'}</div>`;
     return;
   }
   rows.forEach((u, idx)=>{
@@ -802,7 +802,7 @@ async function loadLeaderboard(){
       <div class="lb-rank ${rankClass}">${idx+1}</div>
       <div class="avatar sm" id="lbAv${idx}"></div>
       <div class="lb-name"><div class="u">${escapeHtml(u.username)} ${crownTag}</div></div>
-      <div class="lb-stats"><b>${wins}</b> برد<br>${guesses} حدس</div>
+      <div class="lb-stats"><b>${wins}</b> wins<br>${guesses} guesses</div>
     `;
     row.onclick = ()=> openUserModal(u);
     list.appendChild(row);
@@ -819,12 +819,12 @@ async function openUserModal(u){
   renderAvatar($('modalAvatar'), u);
   $('modalUname').textContent = '@' + u.username;
   $('modalAdminBadge').classList.toggle('hidden', !u.is_admin);
-  $('modalStatus').textContent = u.banned ? 'محروم' : 'فعال';
+  $('modalStatus').textContent = u.banned ? 'Banned' : 'Active';
   $('modalLevel').textContent = u.level;
-  $('modalXp').textContent = `${u.xp} (پیشرفت ${u.level_xp}/${u.level_xp_needed})`;
+  $('modalXp').textContent = `${u.xp} (progress ${u.level_xp}/${u.level_xp_needed})`;
   $('modalWins').textContent = u.total_wins;
   $('modalGuesses').textContent = u.total_guesses;
-  $('modalCrowns').textContent = `${u.crowns} 👑 (${u.champion_points} امتیاز)`;
+  $('modalCrowns').textContent = `${u.crowns} 👑 (${u.champion_points} points)`;
   $('modalLastOnline').textContent = fmtDate(u.last_online);
   $('modalLastWin').textContent = fmtDate(u.last_win);
 
@@ -850,7 +850,7 @@ $('btnBanNormal').onclick = ()=>{
 };
 
 $('confirmBanBtn').onclick = async ()=>{
-  const reason = $('banReasonInput').value.trim() || 'بدون دلیل';
+  const reason = $('banReasonInput').value.trim() || 'No reason';
   const untilVal = $('banUntilInput').value;
   const until = untilVal ? new Date(untilVal).toISOString() : null;
   const u = modalTargetUser;
@@ -862,7 +862,7 @@ $('confirmBanBtn').onclick = async ()=>{
     banned: true, ban_type: pendingBanType, ban_reason: reason, ban_until: until, banned_at: new Date().toISOString()
   }).eq('id', u.id);
 
-  toast('کاربر مسدود شد');
+  toast('User banned');
   $('userModal').classList.add('hidden');
   loadLeaderboard();
 };
@@ -871,7 +871,7 @@ $('btnUnban').onclick = async ()=>{
   const u = modalTargetUser;
   await sb.from('users').update({ banned:false, ban_type:null, ban_reason:null, ban_until:null }).eq('id', u.id);
   if(u.device_id){ await sb.from('banned_devices').delete().eq('device_id', u.device_id); }
-  toast('محرومیت برداشته شد');
+  toast('Ban removed');
   $('userModal').classList.add('hidden');
   loadLeaderboard();
 };
@@ -896,12 +896,12 @@ function refreshProfileUI(){
 $('avatarUploadLabel').onclick = ()=> $('avatarUpload').click();
 $('avatarUpload').onchange = async (e)=>{
   const file = e.target.files[0]; if(!file) return;
-  if(file.size > 2_200_000){ toast('حجم عکس باید کمتر از ۱.۵ مگابایت باشد'); return; }
+  if(file.size > 2_200_000){ toast('Image size must be less than 1.5MB'); return; }
   const reader = new FileReader();
   reader.onload = async ()=>{
     const dataUrl = reader.result;
     const { data: updated, error } = await sb.from('users').update({ avatar_url: dataUrl }).eq('id', CURRENT_USER.id).select().single();
-    if(!error){ CURRENT_USER = updated; refreshProfileUI(); refreshGameUI(); toast('عکس پروفایل بروزرسانی شد'); }
+    if(!error){ CURRENT_USER = updated; refreshProfileUI(); refreshGameUI(); toast('Profile picture updated'); }
   };
   reader.readAsDataURL(file);
 };
@@ -911,19 +911,19 @@ $('saveUsernameBtn').onclick = async ()=>{
   const err = validateUsername(newName);
   if(err){ toast(err); return; }
   if(newName.toLowerCase() === CURRENT_USER.username.toLowerCase() && newName !== CURRENT_USER.username){
-    // فقط تغییر حروف بزرگ/کوچک همان نام خودش - مجاز است، نیازی به چک تکراری نیست
+    // Only changing the case of their own name - allowed, no duplicate check needed
   } else if(newName.toLowerCase() === CURRENT_USER.username.toLowerCase()){
     return;
   } else {
     const { data: exists } = await sb.from('users').select('id').eq('username_lower', newName.toLowerCase()).maybeSingle();
-    if(exists){ toast('این نام کاربری قبلا استفاده شده'); return; }
+    if(exists){ toast('This username is already taken'); return; }
   }
   const { data: updated, error } = await sb.from('users').update({ username:newName }).eq('id', CURRENT_USER.id).select().single();
-  if(error){ toast(error.code === '23505' ? 'این نام کاربری قبلا استفاده شده' : 'خطا در ذخیره نام'); return; }
+  if(error){ toast(error.code === '23505' ? 'This username is already taken' : 'Error saving name'); return; }
   CURRENT_USER = updated;
   refreshProfileUI(); refreshGameUI();
   $('topbarUser').textContent = '@' + updated.username;
-  toast('نام کاربری بروزرسانی شد');
+  toast('Username updated');
 };
 
 $('savePasswordBtn').onclick = async ()=>{
@@ -932,9 +932,9 @@ $('savePasswordBtn').onclick = async ()=>{
   if(err){ toast(err); return; }
   const hash = await sha256(newPass);
   const { error } = await sb.from('users').update({ password_hash: hash }).eq('id', CURRENT_USER.id);
-  if(error){ toast('خطا در ذخیره رمز'); return; }
+  if(error){ toast('Error saving password'); return; }
   $('editPassword').value = '';
-  toast('رمز عبور بروزرسانی شد');
+  toast('Password updated');
 };
 
 $('logoutBtn').onclick = ()=>{
@@ -944,14 +944,14 @@ $('logoutBtn').onclick = ()=>{
 };
 
 /* =====================================================================
-   CHAT (پیام‌های خصوصی بین کاربران)
+   CHAT (private messages between users)
    ===================================================================== */
-let chatPartner = null;        // کاربری که در حال گفتگو با او هستیم
-let chatReplyTarget = null;    // پیامی که در حال پاسخ به آن هستیم
-let chatMsgMap = {};           // id -> message row (برای نمایش نقل قول)
+let chatPartner = null;        // the user we're currently chatting with
+let chatReplyTarget = null;    // the message we're currently replying to
+let chatMsgMap = {};           // id -> message row (for showing quotes)
 let chatChannelSubscribed = false;
 let pendingChatImage = null;
-let unreadCounts = {};         // senderId -> تعداد پیام‌های خوانده‌نشده از آن کاربر
+let unreadCounts = {};         // senderId -> count of unread messages from that user
 
 $('chatSearch').oninput = ()=> loadChatUsers();
 
@@ -975,7 +975,7 @@ async function loadChatUsers(){
   const list = $('chatUserList');
   list.innerHTML = '';
   if(error || !rows || rows.length === 0){
-    list.innerHTML = `<div class="empty-note">کاربری یافت نشد</div>`;
+    list.innerHTML = `<div class="empty-note">No user found</div>`;
     return;
   }
   rows.forEach((u, idx)=>{
@@ -998,8 +998,8 @@ function ensureChatRealtime(){
   sb.channel('messages-realtime')
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' }, payload=>{
       const m = payload.new;
-      if(m.sender_id === CURRENT_USER.id) return; // قبلا خودمان لوکال اضافه کردیم
-      if(m.receiver_id !== CURRENT_USER.id) return; // به ما مربوط نیست
+      if(m.sender_id === CURRENT_USER.id) return; // we already added it locally
+      if(m.receiver_id !== CURRENT_USER.id) return; // not relevant to us
 
       const convoOpen = chatPartner && m.sender_id === chatPartner.id && !$('chatConversation').classList.contains('hidden');
       if(convoOpen){
@@ -1032,7 +1032,7 @@ async function openConversation(user){
   $('replyBar').classList.add('hidden');
   renderAvatar($('convoAvatar'), user);
   $('convoName').textContent = '@' + user.username;
-  $('chatMessages').innerHTML = '<div class="empty-note">در حال بارگذاری...</div>';
+  $('chatMessages').innerHTML = '<div class="empty-note">Loading...</div>';
   $('chatConversation').classList.remove('hidden');
 
   const { data: rows, error } = await sb.from('messages')
@@ -1046,12 +1046,12 @@ async function openConversation(user){
   if(!error && rows){
     rows.forEach(m=>{ chatMsgMap[m.id]=m; appendMessageBubble(m); });
   } else if(error){
-    $('chatMessages').innerHTML = '<div class="empty-note">خطا در بارگذاری پیام‌ها</div>';
+    $('chatMessages').innerHTML = '<div class="empty-note">Error loading messages</div>';
   }
   scrollChatToBottom();
   ensureChatRealtime();
 
-  // پیام‌های این کاربر را خوانده‌شده علامت بزن و شمارنده را صفر/محو کن
+  // mark this user's messages as read and zero/hide the counter
   await sb.from('messages')
     .update({ is_read:true })
     .eq('sender_id', user.id)
@@ -1085,7 +1085,7 @@ function appendMessageBubble(m){
   let quoteHtml = '';
   if(m.reply_to_id && chatMsgMap[m.reply_to_id]){
     const orig = chatMsgMap[m.reply_to_id];
-    const preview = orig.content ? escapeHtml(orig.content).slice(0,80) : '📷 عکس';
+    const preview = orig.content ? escapeHtml(orig.content).slice(0,80) : '📷 Photo';
     quoteHtml = `<div class="msg-quote">${preview}</div>`;
   }
   const imgHtml = m.image_url ? `<img src="${m.image_url}" class="msg-img">` : '';
@@ -1097,8 +1097,8 @@ function appendMessageBubble(m){
     ${imgHtml}
     ${textHtml}
     <div class="msg-actions">
-      <span class="msg-act-reply" data-id="${m.id}">↩ پاسخ</span>
-      ${canDelete ? `<span class="msg-act-del" data-id="${m.id}">🗑 حذف</span>` : ''}
+      <span class="msg-act-reply" data-id="${m.id}">↩ Reply</span>
+      ${canDelete ? `<span class="msg-act-del" data-id="${m.id}">🗑 Delete</span>` : ''}
     </div>
   `;
   wrap.querySelector('.msg-act-reply').onclick = ()=> startReply(m);
@@ -1111,8 +1111,8 @@ function appendMessageBubble(m){
 function startReply(m){
   chatReplyTarget = m;
   $('replyBar').classList.remove('hidden');
-  $('replyBarName').textContent = m.sender_id === CURRENT_USER.id ? 'خودت' : ('@'+chatPartner.username);
-  $('replyBarText').textContent = m.content ? m.content.slice(0,80) : '📷 عکس';
+  $('replyBarName').textContent = m.sender_id === CURRENT_USER.id ? 'You' : ('@'+chatPartner.username);
+  $('replyBarText').textContent = m.content ? m.content.slice(0,80) : '📷 Photo';
 }
 $('cancelReplyBtn').onclick = ()=>{ chatReplyTarget = null; $('replyBar').classList.add('hidden'); };
 
@@ -1121,12 +1121,12 @@ async function deleteMessage(id){
   if(!m) return;
   const isOwner = m.sender_id === CURRENT_USER.id;
   const isAdmin = CURRENT_USER && CURRENT_USER.is_admin;
-  if(!isOwner && !isAdmin) return; // فقط پیام خودت یا ادمین می‌تواند حذف کند
+  if(!isOwner && !isAdmin) return; // only your own message or an admin can delete
 
   const query = sb.from('messages').delete().eq('id', id);
   if(!isAdmin) query.eq('sender_id', CURRENT_USER.id);
   const { error } = await query;
-  if(error){ toast('خطا در حذف پیام'); return; }
+  if(error){ toast('Error deleting message'); return; }
   const el = document.getElementById('msg-'+id);
   if(el) el.remove();
   delete chatMsgMap[id];
@@ -1134,7 +1134,7 @@ async function deleteMessage(id){
 
 $('chatImageInput').onchange = (e)=>{
   const file = e.target.files[0]; if(!file) return;
-  if(file.size > 2_200_000){ toast('حجم عکس باید کمتر از ۱.۵ مگابایت باشد'); e.target.value=''; return; }
+  if(file.size > 2_200_000){ toast('Image size must be less than 1.5MB'); e.target.value=''; return; }
   const reader = new FileReader();
   reader.onload = ()=>{ pendingChatImage = reader.result; sendChatMessage(); e.target.value=''; };
   reader.readAsDataURL(file);
@@ -1158,7 +1158,7 @@ async function sendChatMessage(){
   };
   const { data: saved, error } = await sb.from('messages').insert(payload).select().single();
   pendingChatImage = null;
-  if(error){ toast('خطا در ارسال پیام'); return; }
+  if(error){ toast('Error sending message'); return; }
 
   chatMsgMap[saved.id] = saved;
   appendMessageBubble(saved);
