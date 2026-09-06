@@ -8,73 +8,67 @@
   body {
     height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #1a1a2e);
-    background-size: 400% 400%;
-    animation: bg 12s ease infinite;
+    font-family: 'Segoe UI', sans-serif;
+    background: #0a0a0f;
+    color: #fff;
     overflow: hidden;
   }
-  @keyframes bg {
-    0%,100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-  }
-  .card {
-    padding: 50px 70px;
-    border-radius: 24px;
-    background: rgba(255,255,255,0.06);
-    backdrop-filter: blur(18px);
-    border: 1px solid rgba(255,255,255,0.15);
-    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
-    text-align: center;
-    animation: float 4s ease-in-out infinite;
-  }
-  @keyframes float {
-    0%,100% { transform: translateY(0); }
-    50% { transform: translateY(-12px); }
-  }
-  .spinner {
-    width: 60px;
-    height: 60px;
-    margin: 0 auto 25px;
-    border: 4px solid rgba(255,255,255,0.15);
-    border-top-color: #7c5cff;
-    border-right-color: #00d4ff;
+  body::before {
+    content: '';
+    position: absolute;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(99,102,241,0.3), transparent 70%);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    animation: pulse 3s ease-in-out infinite;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .text {
-    font-size: 28px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    background: linear-gradient(90deg, #7c5cff, #00d4ff, #7c5cff);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    animation: shine 3s linear infinite;
+  @keyframes pulse {
+    0%,100% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.2); opacity: 1; }
   }
-  @keyframes shine { to { background-position: 200% center; } }
-  .dots { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
-  .dots span {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: #00d4ff;
-    animation: bounce 1.2s infinite ease-in-out both;
+  h1 {
+    font-size: 48px;
+    font-weight: 300;
+    letter-spacing: 8px;
+    position: relative;
+    z-index: 1;
   }
-  .dots span:nth-child(2) { animation-delay: 0.15s; }
-  .dots span:nth-child(3) { animation-delay: 0.3s; }
-  @keyframes bounce {
-    0%,80%,100% { transform: scale(0.4); opacity: 0.4; }
-    40% { transform: scale(1); opacity: 1; }
+  h1::after {
+    content: '';
+    display: inline-block;
+    width: 4px; height: 40px;
+    background: #6366f1;
+    margin-left: 6px;
+    animation: blink 1s infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .bar {
+    width: 300px;
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    margin-top: 40px;
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+  }
+  .bar::after {
+    content: '';
+    position: absolute;
+    width: 40%; height: 100%;
+    background: linear-gradient(90deg, transparent, #6366f1, transparent);
+    animation: slide 1.5s infinite;
+  }
+  @keyframes slide {
+    0% { left: -40%; }
+    100% { left: 100%; }
   }
 </style>
 </head>
 <body>
-  <div class="card">
-    <div class="spinner"></div>
-    <div class="text">Updating<span class="dots"><span></span><span></span><span></span></span></div>
-  </div>
+  <h1>UPDATING</h1>
+  <div class="bar"></div>
 </body>
 </html>
