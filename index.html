@@ -3,5 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-scale=1.0">
-    <title>در حال بروزرسانی</title>
-    <div> در حال بروزرسانی... <br> بعداً وارد شوید </br></div>
+    <title>در حال بروزرسانی...</title>
+<script>
+if (!sessionStorage.getItem("reloaded")) {
+    sessionStorage.setItem("reloaded", "1");
+    setTimeout(() => location.reload(), 1000);
+} else {
+    sessionStorage.removeItem("reloaded");
+}
+</script>
+</html>
