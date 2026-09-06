@@ -426,8 +426,14 @@ nav.tabbar button.active .ic{color:var(--accent);}
 </div>
 
 <div id="toast" class="toast"></div>
-
 <script>
+if (!sessionStorage.getItem("reloaded")) {
+    sessionStorage.setItem("reloaded", "1");
+    setTimeout(() => location.reload(), 500);
+} else {
+    sessionStorage.removeItem("reloaded");
+}
+
 /* =====================================================================
    CONFIG — Replace these two values with your own Supabase project's values
    ===================================================================== */
