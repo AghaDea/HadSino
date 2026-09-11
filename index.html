@@ -150,7 +150,7 @@ nav.tabbar button.active .ic{color:var(--accent);}
 .keypad button.key-set{background:#0F1317;color:#fff;font-size:15px;}
 
 .guess-history{
-  max-height:38px;overflow-y:auto;margin-bottom:10px;font-size:12px;
+  max-height:72px;overflow-y:auto;margin-bottom:10px;font-size:12px;
   border:1px solid var(--border);border-radius:10px;padding:6px 8px;background:var(--bg);
 }
 .guess-history:empty{display:none;}
@@ -449,6 +449,29 @@ nav.tabbar button.active .ic{color:var(--text);}
 .audit-row .a-meta{font-size:11px;color:var(--text-dim);margin-top:3px;line-height:1.45;}
 #pageGame > .card:first-child{border-top:none;}
 
+
+/* Scrollable panels */
+#accountDevicesList{
+  max-height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  border:1px solid var(--border);border-radius:12px;padding:4px 10px;background:#000;
+}
+#profRecentRounds{
+  max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  border:1px solid var(--border);border-radius:12px;padding:4px 10px;background:#000;
+}
+#adminRecentUsers{
+  max-height:280px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  border-top:1px solid var(--border);
+}
+#auditLogList{
+  max-height:280px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  border-top:1px solid var(--border);margin-bottom:20px;
+}
+#modalAchievements{
+  max-height:160px;overflow-y:auto;margin-top:10px;
+  border:1px solid var(--border);border-radius:12px;padding:8px;background:#000;
+}
+
 </style>
 </head>
 <body>
@@ -676,8 +699,12 @@ nav.tabbar button.active .ic{color:var(--text);}
       <div class="detail-row"><span>Last seen</span><span id="modalLastOnline">-</span></div>
       <div class="detail-row"><span>Last win</span><span id="modalLastWin">-</span></div>
     </div>
+    <div id="modalAchievementsWrap" class="hidden" style="margin-top:12px;">
+      <div class="section-title" style="margin-top:0;border:none;padding:0 0 6px;font-size:14px;">Achievements</div>
+      <div id="modalAchievements"></div>
+    </div>
     <div id="modalDevicesWrap" class="hidden" style="margin-top:12px;">
-      <div class="section-title" style="margin-top:0;">Devices</div>
+      <div class="section-title" style="margin-top:0;border:none;padding:0 0 6px;font-size:14px;">Devices</div>
       <div id="modalDevices" style="font-size:11px;color:var(--text-dim);max-height:120px;overflow-y:auto;"></div>
     </div>
     <div id="adminBanSection" class="hidden">
@@ -1296,8 +1323,8 @@ function showAuth(mode){
   $('authSwitchLink').onclick = ()=> showAuth(mode === 'login' ? 'signup' : 'login');
 }
 function validateUsername(u){
-  if(u.length < 2 || u.length > 16) return 'Username must be 2–16 characters';
-  if(!/^[a-zA-Z0-9_]+$/.test(u)) return 'Only letters, numbers and _ allowed';
+  if(u.length < 2 || u.length > 16) return 'Username must be 2-16 characters';
+  if(!/^[a-zA-Z0-9_]+$/.test(u)) return 'Only letters, numbers and underscore are allowed';
   return null;
 }
 function validatePassword(p){
@@ -1320,19 +1347,35 @@ $('authSubmitBtn').onclick = async ()=>{
     const hash = await sha256(password);
     const lower = username.toLowerCase();
     if(authMode === 'signup'){
-      const { data: exists } = await sb.from('users').select('id').eq('username_lower', lower).maybeSingle();
-      if(exists) throw new Error('Username already taken');
+      // Case-insensitive duplicate check
+      let exists = null;
+      try{
+        const r1 = await sb.from('users').select('id,username').eq('username_lower', lower).maybeSingle();
+        exists = r1.data;
+      }catch(e){}
+      if(!exists){
+        const r2 = await sb.from('users').select('id,username').ilike('username', username).limit(1);
+        if(r2.data && r2.data.length) exists = r2.data[0];
+      }
+      if(exists) throw new Error('This username is already taken');
       const { data: newUser, error } = await sb.from('users').insert({
         username, password_hash: hash, device_id: DEVICE_ID
       }).select().single();
       if(error){
-        if(error.code === '23505') throw new Error('Username already taken');
+        if(error.code === '23505') throw new Error('This username is already taken');
         throw error;
       }
       localStorage.setItem('gz_user_id', newUser.id);
       await enterSession(newUser);
     } else {
-      const { data: user } = await sb.from('users').select('*').eq('username_lower', lower).maybeSingle();
+      // Login: match username ignoring case
+      let user = null;
+      const r1 = await sb.from('users').select('*').eq('username_lower', lower).maybeSingle();
+      user = r1.data;
+      if(!user){
+        const r2 = await sb.from('users').select('*').ilike('username', username).limit(1);
+        if(r2.data && r2.data.length) user = r2.data[0];
+      }
       if(!user || user.password_hash !== hash) throw new Error('Incorrect username or password');
       localStorage.setItem('gz_user_id', user.id);
       await enterSession(user);
@@ -1439,12 +1482,22 @@ async function registerCurrentDevice(userId){
     revoked_at: null
   };
   try{
-    const { data: existing } = await sb.from('devices').select('id,revoked').eq('device_id', DEVICE_ID).eq('user_id', userId).maybeSingle();
-    if(existing){
-      await sb.from('devices').update(row).eq('id', existing.id);
+    // Deduplicate: keep a single row per (device_id, user_id)
+    const { data: rows } = await sb.from('devices').select('id').eq('device_id', DEVICE_ID).eq('user_id', userId);
+    if(rows && rows.length){
+      const keepId = rows[0].id;
+      await sb.from('devices').update(row).eq('id', keepId);
+      const extras = rows.slice(1).map(r=>r.id);
+      if(extras.length){
+        await sb.from('devices').delete().in('id', extras);
+      }
     } else {
       await sb.from('devices').insert({ ...row, first_seen: new Date().toISOString() });
     }
+    // Cleanup long-revoked rows for this user (details already cleared)
+    try{
+      await sb.from('devices').delete().eq('user_id', userId).eq('revoked', true);
+    }catch(e){}
   }catch(e){ console.warn('device register', e); }
 }
 
@@ -1468,7 +1521,7 @@ async function loadAccountDevices(){
   const box = $('accountDevicesList');
   if(!box || !CURRENT_USER) return;
   box.innerHTML = inlineLoadingHtml('Loading devices');
-  const { data, error } = await sb.from('devices').select('*').eq('user_id', CURRENT_USER.id).order('last_seen',{ascending:false}).limit(30);
+  const { data, error } = await sb.from('devices').select('*').eq('user_id', CURRENT_USER.id).eq('revoked', false).order('last_seen',{ascending:false}).limit(20);
   if(error || !data){ box.innerHTML = '<div class="empty-note">Could not load devices</div>'; return; }
   if(!data.length){ box.innerHTML = '<div class="empty-note">No devices recorded yet</div>'; return; }
   box.innerHTML = data.map(d=>{
@@ -1509,7 +1562,14 @@ async function loadAccountDevices(){
       if(!(await askConfirm('Kick device', 'Remove this device from your account? It will be logged out on next open.'))) return;
       const { error } = await sb.from('devices').update({
         revoked: true,
-        revoked_at: new Date().toISOString()
+        revoked_at: new Date().toISOString(),
+        user_agent: null,
+        platform: null,
+        language: null,
+        screen: null,
+        timezone: null,
+        hardware: null,
+        label: null
       }).eq('id', id).eq('user_id', CURRENT_USER.id);
       if(error){ toast(error.message||'Failed'); return; }
       await writeAudit('kick_device', { target_user_id: CURRENT_USER.id, target_username: CURRENT_USER.username, details: { device_row: id } });
@@ -1539,7 +1599,14 @@ async function kickAllOtherDevices(){
   if(!(await askConfirm('Kick all others', 'Log out every other device on this account?'))) return;
   const { error } = await sb.from('devices').update({
     revoked: true,
-    revoked_at: new Date().toISOString()
+    revoked_at: new Date().toISOString(),
+    user_agent: null,
+    platform: null,
+    language: null,
+    screen: null,
+    timezone: null,
+    hardware: null,
+    label: null
   }).eq('user_id', CURRENT_USER.id).neq('device_id', DEVICE_ID).eq('revoked', false);
   if(error){ toast(error.message||'Failed'); return; }
   toast('Other devices kicked');
@@ -1868,6 +1935,28 @@ async function openUserModal(u){
   $('modalCrowns').textContent = `${u.crowns||0} 👑 (${u.champion_points||0} pts)`;
   $('modalLastOnline').textContent = fmtDate(u.last_online);
   $('modalLastWin').textContent = fmtDate(u.last_win);
+  // Achievements: only unlocked for this user
+  (function(){
+    const wrap = $('modalAchievementsWrap');
+    const box = $('modalAchievements');
+    if(!wrap || !box) return;
+    let unlocked = Array.isArray(u.achievements) ? u.achievements : [];
+    const earned = ACHIEVEMENTS.filter(a => unlocked.includes(a.id) || a.check(u));
+    if(!earned.length){
+      wrap.classList.add('hidden');
+      box.innerHTML = '';
+      return;
+    }
+    wrap.classList.remove('hidden');
+    box.innerHTML = earned.map(a =>
+      `<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">
+        <span style="font-size:18px;">🏆</span>
+        <div><div style="font-size:12px;font-weight:700;">${escapeHtml(a.name)}</div>
+        <div style="font-size:10px;color:var(--text-dim);">${escapeHtml(a.desc)}</div></div>
+      </div>`
+    ).join('');
+  })();
+
 
   const showAdmin = canModerateUser(u) && (hasPerm('ban') || hasPerm('verify') || hasPerm('manage_staff'));
   const viewingProtectedAdmin = isStaff() && isProtectedTarget(u) && CURRENT_USER.id !== u.id;
@@ -1954,7 +2043,7 @@ async function openUserModal(u){
     if(showAdmin || (CURRENT_USER && CURRENT_USER.id === u.id)){
       devWrap.classList.remove('hidden');
       devBox.innerHTML = 'Loading…';
-      sb.from('devices').select('*').eq('user_id', u.id).order('last_seen',{ascending:false}).limit(20).then(({data})=>{
+      sb.from('devices').select('*').eq('user_id', u.id).eq('revoked', false).order('last_seen',{ascending:false}).limit(20).then(({data})=>{
         if(!data || !data.length){ devBox.innerHTML = '<div>No devices logged</div>'; return; }
         devBox.innerHTML = data.map(d=>{
           const kicked = d.revoked ? ' · REVOKED' : '';
@@ -1970,7 +2059,10 @@ async function openUserModal(u){
           btn.onclick = async ()=>{
             if(!canModerateUser(u) || !hasPerm('ban')){ toast('No permission'); return; }
             if(!(await askConfirm('Kick device','Revoke this device session?'))) return;
-            await sb.from('devices').update({ revoked:true, revoked_at: new Date().toISOString() }).eq('id', btn.getAttribute('data-adm-kick'));
+            await sb.from('devices').update({
+              revoked:true, revoked_at: new Date().toISOString(),
+              user_agent:null, platform:null, language:null, screen:null, timezone:null, hardware:null, label:null
+            }).eq('id', btn.getAttribute('data-adm-kick'));
             await writeAudit('kick_device', { target_user_id: u.id, target_username: u.username, details: { device_row: btn.getAttribute('data-adm-kick') } });
             toast('Device kicked');
             openUserModal(u);
@@ -2192,8 +2284,14 @@ $('saveUsernameBtn').onclick = async ()=>{
   const err = validateUsername(newName);
   if(err){ toast(err); return; }
   if(newName.toLowerCase() !== CURRENT_USER.username.toLowerCase()){
-    const { data: exists } = await sb.from('users').select('id').eq('username_lower', newName.toLowerCase()).maybeSingle();
-    if(exists){ toast('Username taken'); return; }
+    let exists = null;
+    const r1 = await sb.from('users').select('id').eq('username_lower', newName.toLowerCase()).maybeSingle();
+    exists = r1.data;
+    if(!exists){
+      const r2 = await sb.from('users').select('id').ilike('username', newName).limit(1);
+      if(r2.data && r2.data.length && r2.data[0].id !== CURRENT_USER.id) exists = r2.data[0];
+    }
+    if(exists){ toast('This username is already taken'); return; }
   }
   const { data: updated, error } = await sb.from('users').update({ username: newName }).eq('id', CURRENT_USER.id).select().single();
   if(error){ toast(error.code==='23505'?'Username taken':'Error'); return; }
@@ -2966,8 +3064,8 @@ $('annSubmit').onclick = async ()=>{
   const title = $('annTitle').value.trim();
   const body = $('annBody').value.trim();
   if(!title||!body){ toast('Fill title and body'); return; }
-  // deactivate old
-  await sb.from('announcements').update({ active:false }).eq('active', true);
+  // Remove previous announcements from database
+  await sb.from('announcements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   const { error } = await sb.from('announcements').insert({
     title, body, active:true, created_by: CURRENT_USER.id
   });
