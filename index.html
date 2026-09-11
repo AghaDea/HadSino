@@ -150,7 +150,7 @@ nav.tabbar button.active .ic{color:var(--accent);}
 .keypad button.key-set{background:#0F1317;color:#fff;font-size:15px;}
 
 .guess-history{
-  max-height:38px;overflow-y:auto;margin-bottom:10px;font-size:12px;
+  max-height:72px;overflow-y:auto;margin-bottom:10px;font-size:12px;
   border:1px solid var(--border);border-radius:10px;padding:6px 8px;background:var(--bg);
 }
 .guess-history:empty{display:none;}
@@ -470,6 +470,32 @@ nav.tabbar button.active .ic{color:var(--text);}
 #modalAchievements{
   max-height:160px;overflow-y:auto;margin-top:10px;
   border:1px solid var(--border);border-radius:12px;padding:8px;background:#000;
+}
+
+
+/* Level title colors */
+.level-title{font-weight:800;font-size:12px;letter-spacing:.2px;}
+.lt-rookie{color:#8b98a5;}
+.lt-skilled{
+  background:linear-gradient(90deg,#34d399,#2dd4bf);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  font-weight:900;text-shadow:0 0 18px rgba(45,212,191,.25);
+}
+.lt-pro{color:#60a5fa;font-weight:900;}
+.lt-expert{color:#a78bfa;font-weight:900;}
+.lt-master{color:#f472b6;font-weight:900;}
+.lt-legend{
+  background:linear-gradient(90deg,#fbbf24,#f59e0b,#ef4444);
+  -webkit-background-clip:text;background-clip:text;color:transparent;font-weight:900;
+}
+/* Owner badge */
+.owner-badge{
+  display:inline-flex;align-items:center;gap:3px;
+  background:linear-gradient(135deg,#7c3aed,#db2777);
+  color:#fff !important;font-size:10px;padding:3px 9px;border-radius:999px;
+  font-weight:800;letter-spacing:.3px;
+  box-shadow:0 0 12px rgba(124,58,237,.45);
+  border:none;
 }
 
 </style>
@@ -992,6 +1018,18 @@ function levelTitle(level){
   if(level >= 5) return 'Skilled';
   return 'Rookie';
 }
+function levelTitleClass(level){
+  level = Number(level)||1;
+  if(level >= 50) return 'lt-legend';
+  if(level >= 30) return 'lt-master';
+  if(level >= 20) return 'lt-expert';
+  if(level >= 10) return 'lt-pro';
+  if(level >= 5) return 'lt-skilled';
+  return 'lt-rookie';
+}
+function levelTitleHtml(level){
+  return `<span class="level-title ${levelTitleClass(level)}">${levelTitle(level)}</span>`;
+}
 function verifiedBadgeHtml(user){
   if(!user || !user.tik) return '';
   return `<span class="tik-badge" title="Verified"><img src="https://upload.wikimedia.org/wikipedia/commons/e/e4/Twitter_Verified_Badge.svg" alt="" width="15" height="15" draggable="false"></span>`;
@@ -1009,10 +1047,10 @@ let guessHistory = [];
 let gameMode = localStorage.getItem('gz_game_mode') || 'normal';
 
 const GAME_MODES = {
-  easy:    { min:0, max:10000,   label:'0 – 10,000',   xpBase:18, xpMin:8,  xpStep:2 },
-  normal:  { min:0, max:500000,  label:'0 – 500,000',  xpBase:30, xpMin:10, xpStep:2 },
-  hard:    { min:0, max:1000000, label:'0 – 1,000,000',xpBase:48, xpMin:16, xpStep:2 },
-  extreme: { min:0, max:5000000, label:'0 – 5,000,000',xpBase:80, xpMin:25, xpStep:3 }
+  easy:    { min:0,       max:10000,   label:'0 – 10,000',          xpBase:18, xpMin:8,  xpStep:2 },
+  normal:  { min:10000,   max:500000,  label:'10,000 – 500,000',    xpBase:30, xpMin:10, xpStep:2 },
+  hard:    { min:500000,  max:1000000, label:'500,000 – 1,000,000', xpBase:48, xpMin:16, xpStep:2 },
+  extreme: { min:1000000, max:5000000, label:'1,000,000 – 5,000,000', xpBase:80, xpMin:25, xpStep:3 }
 };
 if(!GAME_MODES[gameMode]) gameMode = 'normal';
 
@@ -1828,7 +1866,7 @@ function refreshGameUI(){
   renderAvatar($('gameAvatar'), u);
   $('gameUname').innerHTML = '@' + escapeHtml(u.username) + verifiedBadgeHtml(u);
   $('gameLevel').textContent = u.level;
-  $('gameLevelTitle').textContent = levelTitle(u.level);
+  $('gameLevelTitle').innerHTML = levelTitleHtml(u.level);
   $('gameXpText').textContent = `${u.level_xp}/${u.level_xp_needed}`;
   $('gameXpBar').style.width = Math.min(100, (u.level_xp / Math.max(1,u.level_xp_needed))*100) + '%';
   $('statTotalWins').textContent = u.total_wins;
@@ -1924,10 +1962,17 @@ async function openUserModal(u){
   renderAvatar($('modalAvatar'), u);
   $('modalUname').innerHTML = '@' + escapeHtml(u.username) + verifiedBadgeHtml(u);
   $('modalAdminBadge').classList.toggle('hidden', !(u.is_admin || u.is_owner));
-  if(u.is_owner){ $('modalAdminBadge').textContent = 'Owner'; $('modalAdminBadge').style.background = 'var(--gold)'; $('modalAdminBadge').style.color = '#000'; }
-  else { $('modalAdminBadge').textContent = 'Staff'; $('modalAdminBadge').style.background = ''; $('modalAdminBadge').style.color = ''; }
+  if(u.is_owner){
+    $('modalAdminBadge').textContent = '✦ Owner';
+    $('modalAdminBadge').className = 'owner-badge';
+    $('modalAdminBadge').style.cssText = '';
+  } else {
+    $('modalAdminBadge').textContent = 'Staff';
+    $('modalAdminBadge').className = 'admin-badge';
+    $('modalAdminBadge').style.cssText = '';
+  }
   $('modalStatus').textContent = u.banned ? 'Banned' : (isOnline(u.last_online) ? 'Online' : 'Offline');
-  $('modalLevel').textContent = u.level + ' (' + levelTitle(u.level) + ')';
+  $('modalLevel').innerHTML = u.level + ' · ' + levelTitleHtml(u.level);
   $('modalXp').textContent = `${u.xp} (progress ${u.level_xp}/${u.level_xp_needed})`;
   $('modalWins').textContent = u.total_wins;
   $('modalGuesses').textContent = u.total_guesses;
@@ -2220,10 +2265,10 @@ function refreshProfileUI(){
   $('profXpTotal').textContent = u.xp || 0;
   $('editUsername').value = u.username;
   $('editPassword').value = '';
-  $('profLevelTitle').textContent = levelTitle(u.level);
+  $('profLevelTitle').innerHTML = levelTitleHtml(u.level);
   const pu = $('profUname');
   if(pu){
-    pu.innerHTML = '@' + escapeHtml(u.username) + ' ' + verifiedBadgeHtml(u) + (u.is_owner ? ' <span class="admin-badge" style="background:var(--gold);color:#000">Owner</span>' : (u.is_admin ? ' <span class="admin-badge">Staff</span>' : ''));
+    pu.innerHTML = '@' + escapeHtml(u.username) + ' ' + verifiedBadgeHtml(u) + (u.is_owner ? ' <span class="owner-badge">✦ Owner</span>' : (u.is_admin ? ' <span class="admin-badge">Staff</span>' : ''));
   }
   // achievements
   const grid = $('achGrid');
@@ -2977,6 +3022,23 @@ if($('adminChatsModal')) $('adminChatsModal').addEventListener('click', e=>{ if(
 /* ---------- ADMIN DASHBOARD ---------- */
 async function loadAdminDash(){
   if(!isStaff()){ toast('Staff only'); goPage('game'); return; }
+  let ob = $('ownerBanner');
+  if(!ob){
+    ob = document.createElement('div');
+    ob.id = 'ownerBanner';
+    const page = $('pageAdmin');
+    if(page) page.insertBefore(ob, page.firstChild);
+  }
+  if(isOwner()){
+    ob.className = '';
+    ob.style.cssText = 'margin:12px 16px;padding:12px 14px;border-radius:14px;background:linear-gradient(135deg,rgba(124,58,237,.2),rgba(219,39,119,.15));border:1px solid rgba(124,58,237,.4);font-size:13px;';
+    ob.innerHTML = '<b class="owner-badge">✦ Owner</b> <span style="margin-left:8px;color:var(--text-dim);">Full control · manage staff permissions from any user profile</span>';
+  } else {
+    ob.style.cssText = 'margin:12px 16px;padding:10px 14px;border-radius:14px;border:1px solid var(--border);font-size:12px;color:var(--text-dim);';
+    const p = getPerms();
+    const active = Object.keys(p).filter(k=>p[k]).join(', ') || 'none';
+    ob.innerHTML = '<span class="admin-badge">Staff</span> <span style="margin-left:8px;">Your access: '+escapeHtml(active)+'</span>';
+  }
   // Show/hide tools by permission
   const show = (id, on)=>{ const e=$(id); if(e) e.style.display = on ? '' : 'none'; };
   show('admBtnTickets', hasPerm('support'));
