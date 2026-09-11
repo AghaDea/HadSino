@@ -1083,13 +1083,16 @@ const PERM_KEYS = [
   { key:'manage_staff', label:'Manage staff & permissions' }
 ];
 
+function truthyFlag(v){
+  return v === true || v === 'true' || v === 1 || v === '1';
+}
 function isOwner(u){
   u = u || CURRENT_USER;
-  return !!(u && u.is_owner);
+  return !!(u && truthyFlag(u.is_owner));
 }
 function isStaff(u){
   u = u || CURRENT_USER;
-  return !!(u && (u.is_owner || u.is_admin));
+  return !!(u && (truthyFlag(u.is_owner) || truthyFlag(u.is_admin)));
 }
 function getPerms(u){
   u = u || CURRENT_USER;
@@ -1112,19 +1115,16 @@ function hasPerm(key, u){
   return !!p[key];
 }
 function isProtectedTarget(u){
-  // Owner always protected; other admins only protected from non-owners
   if(!u) return true;
-  if(u.is_owner) return true;
-  if(u.is_admin && !isOwner()) return true;
+  if(truthyFlag(u.is_owner)) return true;
+  if(truthyFlag(u.is_admin) && !isOwner()) return true;
   return false;
 }
 function canModerateUser(u){
   if(!CURRENT_USER || !isStaff()) return false;
   if(!u || u.id === CURRENT_USER.id) return false;
-  if(u.is_owner) return false;
-  // Only owner can moderate other admins
-  if(u.is_admin && !isOwner()) return false;
-  // Ban permission required for ban actions (checked separately too)
+  if(truthyFlag(u.is_owner)) return false;
+  if(truthyFlag(u.is_admin) && !isOwner()) return false;
   return true;
 }
 
@@ -1961,16 +1961,22 @@ async function openUserModal(u){
   modalTargetUser = u;
   renderAvatar($('modalAvatar'), u);
   $('modalUname').innerHTML = '@' + escapeHtml(u.username) + verifiedBadgeHtml(u);
-  $('modalAdminBadge').classList.toggle('hidden', !(u.is_admin || u.is_owner));
-  if(u.is_owner){
-    $('modalAdminBadge').textContent = '✦ Owner';
-    $('modalAdminBadge').className = 'owner-badge';
-    $('modalAdminBadge').style.cssText = '';
-  } else {
-    $('modalAdminBadge').textContent = 'Staff';
-    $('modalAdminBadge').className = 'admin-badge';
-    $('modalAdminBadge').style.cssText = '';
-  }
+  // Role badge: only Owner / Staff — never on normal users
+  (function(){
+    const badge = $('modalAdminBadge');
+    if(!badge) return;
+    badge.style.cssText = '';
+    if(u.is_owner){
+      badge.textContent = '✦ Owner';
+      badge.className = 'owner-badge';
+    } else if(u.is_admin === true || u.is_admin === 'true' || u.is_admin === 1){
+      badge.textContent = 'Staff';
+      badge.className = 'admin-badge';
+    } else {
+      badge.textContent = '';
+      badge.className = 'admin-badge hidden';
+    }
+  })();
   $('modalStatus').textContent = u.banned ? 'Banned' : (isOnline(u.last_online) ? 'Online' : 'Offline');
   $('modalLevel').innerHTML = u.level + ' · ' + levelTitleHtml(u.level);
   $('modalXp').textContent = `${u.xp} (progress ${u.level_xp}/${u.level_xp_needed})`;
@@ -2268,7 +2274,7 @@ function refreshProfileUI(){
   $('profLevelTitle').innerHTML = levelTitleHtml(u.level);
   const pu = $('profUname');
   if(pu){
-    pu.innerHTML = '@' + escapeHtml(u.username) + ' ' + verifiedBadgeHtml(u) + (u.is_owner ? ' <span class="owner-badge">✦ Owner</span>' : (u.is_admin ? ' <span class="admin-badge">Staff</span>' : ''));
+    pu.innerHTML = '@' + escapeHtml(u.username) + ' ' + verifiedBadgeHtml(u) + (truthyFlag(u.is_owner) ? ' <span class="owner-badge">✦ Owner</span>' : (truthyFlag(u.is_admin) ? ' <span class="admin-badge">Staff</span>' : ''));
   }
   // achievements
   const grid = $('achGrid');
@@ -3087,7 +3093,7 @@ async function loadAdminDash(){
     row.innerHTML = `
       <div class="avatar sm" id="admAv${idx}"></div>
       <div class="lb-name">
-        <div class="u">${usernameWithTik(u)} ${u.is_admin?'<span class="admin-badge">Admin</span>':''} ${u.banned?'🚫':''}</div>
+        <div class="u">${usernameWithTik(u)} ${u.is_owner?'<span class="owner-badge">✦ Owner</span>':(u.is_admin?'<span class="admin-badge">Staff</span>':'')} ${u.banned?'🚫':''}</div>
         <div style="font-size:10px;color:var(--text-dim);">${online?'Online':fmtDate(u.last_online)} · ${u.weekly_wins||0} week wins</div>
       </div>
       <div class="lb-stats">${u.total_wins} wins<br>Lv ${u.level}</div>`;
