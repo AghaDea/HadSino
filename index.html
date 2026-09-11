@@ -623,7 +623,7 @@ nav.tabbar button.active .ic{color:var(--text);}
         <div class="stat-grid">
           <div class="box"><b id="profWins">0</b><span>Total wins</span></div>
           <div class="box"><b id="profGuesses">0</b><span>Total guesses</span></div>
-          <div class="box"><b id="profCrowns">0 👑</b><span>Championships</span></div>
+          <div class="box"><b id="profCrowns">0 🏆</b><span>Championships</span></div>
         </div>
         <div class="stat-grid">
           <div class="box"><b id="profAvg">—</b><span>Avg / win</span></div>
@@ -682,7 +682,7 @@ nav.tabbar button.active .ic{color:var(--text);}
           <button type="button" id="admBtnTickets">Support tickets</button>
           <button type="button" id="admBtnReports">Chat reports</button>
           <button type="button" id="admBtnChats">All chats</button>
-          <button type="button" id="admBtnResetWeekly">Reset weekly ♻️</button>
+          <button type="button" id="admBtnResetWeekly">Reset weekly</button>
           <button type="button" id="admBtnAnnounce">New announcement</button>
           <button type="button" id="admBtnSearchUser">Find user</button>
         </div>
@@ -690,17 +690,17 @@ nav.tabbar button.active .ic{color:var(--text);}
         <div id="adminRecentUsers"></div>
 
         <div class="section-title">Audit log</div>
-        <p style="font-size:12px;color:var(--text-dim);padding:0 16px;margin:0 0 4px;">Bans, verifies, kicks, weekly resets and other admin actions.</p>
+        <p style="font-size:12px;color:var(--text-dim);padding:0 16px;margin:0 0 4px;">open</p>
         <div id="auditLogList"></div>
       </section>
     </main>
 
     <nav class="tabbar">
       <button id="navGame" class="active"><span class="ic">🎮</span>Game</button>
-      <button id="navLeaderboard"><span class="ic">🏆</span>Leaderboard</button>
+      <button id="navLeaderboard"><span class="ic">👑</span>Leaderboard</button>
       <button id="navChat"><span class="ic">💬</span>Chat<span class="tab-badge hide" id="chatTabBadge">0</span></button>
-      <button id="navProfile"><span class="ic">👤</span>Profile</button>
-      <button id="navAdmin" class="hidden"><span class="ic">⚙️</span>Admin</button>
+      <button id="navProfile"><span class="ic">⚙️</span>Profile</button>
+      <button id="navAdmin" class="hidden"><span class="ic">🌐</span>Admin</button>
     </nav>
   </div>
 </div>
@@ -1264,7 +1264,7 @@ async function ensureWeeklyReset(){
   const res = await runWeeklyReset(false);
   if(res && res.reset){
     if(res.champion){
-      toast('👑 Weekly champion: @' + res.champion);
+      toast('🏆 Weekly champion: @' + res.champion);
     } else {
       toast('Weekly leaderboard reset');
     }
@@ -1915,7 +1915,7 @@ async function loadLeaderboard(){
     if(lbMode==='global'){ primary = u.total_wins; secondary = u.total_guesses + ' guesses'; }
     else if(lbMode==='weekly'){ primary = u.weekly_wins; secondary = u.weekly_guesses + ' guesses'; }
     else { primary = u.best_streak; secondary = u.total_wins + ' wins'; }
-    const crownTag = (u.crowns||0) > 0 ? `<span class="crown-tag">👑${u.crowns}</span>` : '';
+    const crownTag = (u.crowns||0) > 0 ? `<span class="crown-tag">🏆${u.crowns}</span>` : '';
     row.innerHTML = `
       <div class="lb-rank ${rankClass}">${idx+1}</div>
       <div class="avatar sm" id="lbAv${idx}"></div>
@@ -1967,7 +1967,7 @@ async function openUserModal(u){
     if(!badge) return;
     badge.style.cssText = '';
     if(u.is_owner){
-      badge.textContent = '✦ Owner';
+      badge.textContent = '✦ Boss';
       badge.className = 'owner-badge';
     } else if(u.is_admin === true || u.is_admin === 'true' || u.is_admin === 1){
       badge.textContent = 'Staff';
@@ -1983,7 +1983,7 @@ async function openUserModal(u){
   $('modalWins').textContent = u.total_wins;
   $('modalGuesses').textContent = u.total_guesses;
   $('modalStreak').textContent = (u.best_streak||0) + ' (current ' + (u.current_streak||0) + ')';
-  $('modalCrowns').textContent = `${u.crowns||0} 👑 (${u.champion_points||0} pts)`;
+  $('modalCrowns').textContent = `${u.crowns||0} 🏆 (${u.champion_points||0} pts)`;
   $('modalLastOnline').textContent = fmtDate(u.last_online);
   $('modalLastWin').textContent = fmtDate(u.last_win);
   // Achievements: only unlocked for this user
@@ -2049,11 +2049,11 @@ async function openUserModal(u){
           <span>${p.label}</span>
         </label>`).join('') +
       `<button type="button" class="btn btn-primary" id="savePermsBtn" style="margin-top:8px;font-size:13px;">Save permissions</button>
-       <div style="font-size:10px;color:var(--text-dim);margin-top:6px;">User must be Staff first. Only the owner can change these.</div>`;
+       <div style="font-size:10px;color:var(--text-dim);margin-top:6px;">User must be Staff first. Only the Boss can change these.</div>`;
     const saveBtn = permBox.querySelector('#savePermsBtn');
     if(saveBtn){
       saveBtn.onclick = async ()=>{
-        if(!isOwner()){ toast('Only owner can edit permissions'); return; }
+        if(!isOwner()){ toast('Only Boss can edit permissions'); return; }
         if(!u.is_admin){ toast('Make them Staff first'); return; }
         const next = {};
         permBox.querySelectorAll('[data-perm]').forEach(cb=>{ next[cb.getAttribute('data-perm')] = cb.checked; });
@@ -2081,8 +2081,8 @@ async function openUserModal(u){
   if(viewingProtectedAdmin){
     prot.classList.remove('hidden');
     prot.textContent = u.is_owner
-      ? 'Owner account — fully protected.'
-      : 'Staff account — only the owner can moderate staff.';
+      ? 'Boss account — fully protected.'
+      : 'Staff account — only the Boss can moderate staff.';
   } else {
     prot.classList.add('hidden');
     prot.textContent = '';
@@ -2233,7 +2233,7 @@ $('btnToggleTik').onclick = async ()=>{
 
 $('btnToggleAdmin').onclick = async ()=>{
   const u = modalTargetUser;
-  if(!isOwner()){ toast('Only the owner can manage staff'); return; }
+  if(!isOwner()){ toast('Only the Boss can manage staff'); return; }
   if(!u || u.id === CURRENT_USER.id || u.is_owner){ toast('Not allowed'); return; }
   const next = !u.is_admin;
   if(!(await askConfirm(next?'Make Staff':'Revoke Staff', (next?'Grant staff role to @':'Remove staff role from @')+u.username+'?'))) return;
@@ -2261,7 +2261,7 @@ function refreshProfileUI(){
   $('profXpText').textContent = `${u.level_xp}/${u.level_xp_needed}`;
   $('profWins').textContent = u.total_wins;
   $('profGuesses').textContent = u.total_guesses;
-  $('profCrowns').textContent = `${u.crowns||0} 👑`;
+  $('profCrowns').textContent = `${u.crowns||0} 🏆`;
   const wins = Number(u.total_wins||0), guesses = Number(u.total_guesses||0);
   $('profAvg').textContent = wins > 0 ? (guesses/wins).toFixed(1) : '—';
   $('profStreak').textContent = u.best_streak || 0;
@@ -2274,7 +2274,7 @@ function refreshProfileUI(){
   $('profLevelTitle').innerHTML = levelTitleHtml(u.level);
   const pu = $('profUname');
   if(pu){
-    pu.innerHTML = '@' + escapeHtml(u.username) + ' ' + verifiedBadgeHtml(u) + (truthyFlag(u.is_owner) ? ' <span class="owner-badge">✦ Owner</span>' : (truthyFlag(u.is_admin) ? ' <span class="admin-badge">Staff</span>' : ''));
+    pu.innerHTML = '@' + escapeHtml(u.username) + ' ' + verifiedBadgeHtml(u) + (truthyFlag(u.is_owner) ? ' <span class="owner-badge">✦ Boss</span>' : (truthyFlag(u.is_admin) ? ' <span class="admin-badge">Staff</span>' : ''));
   }
   // achievements
   const grid = $('achGrid');
@@ -3038,7 +3038,7 @@ async function loadAdminDash(){
   if(isOwner()){
     ob.className = '';
     ob.style.cssText = 'margin:12px 16px;padding:12px 14px;border-radius:14px;background:linear-gradient(135deg,rgba(124,58,237,.2),rgba(219,39,119,.15));border:1px solid rgba(124,58,237,.4);font-size:13px;';
-    ob.innerHTML = '<b class="owner-badge">✦ Owner</b> <span style="margin-left:8px;color:var(--text-dim);">Full control · manage staff permissions from any user profile</span>';
+    ob.innerHTML = '<b class="owner-badge">✦ Boss</b> <span style="margin-left:8px;color:var(--text-dim);">Full control · manage staff permissions from any user profile</span>';
   } else {
     ob.style.cssText = 'margin:12px 16px;padding:10px 14px;border-radius:14px;border:1px solid var(--border);font-size:12px;color:var(--text-dim);';
     const p = getPerms();
@@ -3093,7 +3093,7 @@ async function loadAdminDash(){
     row.innerHTML = `
       <div class="avatar sm" id="admAv${idx}"></div>
       <div class="lb-name">
-        <div class="u">${usernameWithTik(u)} ${u.is_owner?'<span class="owner-badge">✦ Owner</span>':(u.is_admin?'<span class="admin-badge">Staff</span>':'')} ${u.banned?'🚫':''}</div>
+        <div class="u">${usernameWithTik(u)} ${u.is_owner?'<span class="owner-badge">✦ Boss</span>':(u.is_admin?'<span class="admin-badge">Staff</span>':'')} ${u.banned?'🚫':''}</div>
         <div style="font-size:10px;color:var(--text-dim);">${online?'Online':fmtDate(u.last_online)} · ${u.weekly_wins||0} week wins</div>
       </div>
       <div class="lb-stats">${u.total_wins} wins<br>Lv ${u.level}</div>`;
@@ -3108,12 +3108,12 @@ $('admBtnReports').onclick = ()=> openReportsList();
 $('admBtnChats').onclick = ()=> openAdminAllChats();
 $('admBtnResetWeekly').onclick = async ()=>{
   if(!hasPerm('weekly_reset')){ toast('No permission'); return; }
-  if(!(await askConfirm('Reset weekly','Award 👑 to current #1 and reset ONLY weekly wins/guesses for everyone?'))) return;
+  if(!(await askConfirm('Reset weekly','Award 🏆 to current #1 and reset ONLY weekly wins/guesses for everyone?'))) return;
   try{
     const res = await runWeeklyReset(true); // force
     if(res && res.reset){
       await writeAudit('weekly_reset', { details: { champion: res.champion || null, week_key: res.week_key || null, force: true } });
-      if(res.champion) toast('👑 Crown → @' + res.champion + ' · week reset');
+      if(res.champion) toast('🏆 Crown → @' + res.champion + ' · week reset');
       else toast('Weekly stats reset (no champion)');
     } else {
       toast(res && res.error ? res.error : 'Reset finished');
