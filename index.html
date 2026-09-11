@@ -150,7 +150,7 @@ nav.tabbar button.active .ic{color:var(--accent);}
 .keypad button.key-set{background:#0F1317;color:#fff;font-size:15px;}
 
 .guess-history{
-  max-height:38px;overflow-y:auto;margin-bottom:10px;font-size:12px;
+  max-height:72px;overflow-y:auto;margin-bottom:10px;font-size:12px;
   border:1px solid var(--border);border-radius:10px;padding:6px 8px;background:var(--bg);
 }
 .guess-history:empty{display:none;}
@@ -1004,6 +1004,65 @@ const ACHIEVEMENTS = [
 
 const RATE = { ticketMs:60000, chatMs:1200, reportMs:30000, lastTicket:0, lastChat:0, lastReport:0 };
 
+
+/** ---- Owner + granular staff permissions ---- */
+const PERM_KEYS = [
+  { key:'support', label:'Support tickets' },
+  { key:'reports', label:'Chat reports' },
+  { key:'ban', label:'Ban / unban users' },
+  { key:'verify', label:'Give / remove verified' },
+  { key:'chats', label:'View all chats' },
+  { key:'announce', label:'Announcements' },
+  { key:'weekly_reset', label:'Weekly reset' },
+  { key:'audit', label:'Audit log' },
+  { key:'manage_staff', label:'Manage staff & permissions' }
+];
+
+function isOwner(u){
+  u = u || CURRENT_USER;
+  return !!(u && u.is_owner);
+}
+function isStaff(u){
+  u = u || CURRENT_USER;
+  return !!(u && (u.is_owner || u.is_admin));
+}
+function getPerms(u){
+  u = u || CURRENT_USER;
+  if(!u) return {};
+  if(u.is_owner){
+    const all = {};
+    PERM_KEYS.forEach(p=> all[p.key] = true);
+    return all;
+  }
+  let p = u.permissions || {};
+  if(typeof p === 'string'){ try{ p = JSON.parse(p); }catch(e){ p = {}; } }
+  return p || {};
+}
+function hasPerm(key, u){
+  u = u || CURRENT_USER;
+  if(!u) return false;
+  if(u.is_owner) return true;
+  if(!u.is_admin) return false;
+  const p = getPerms(u);
+  return !!p[key];
+}
+function isProtectedTarget(u){
+  // Owner always protected; other admins only protected from non-owners
+  if(!u) return true;
+  if(u.is_owner) return true;
+  if(u.is_admin && !isOwner()) return true;
+  return false;
+}
+function canModerateUser(u){
+  if(!CURRENT_USER || !isStaff()) return false;
+  if(!u || u.id === CURRENT_USER.id) return false;
+  if(u.is_owner) return false;
+  // Only owner can moderate other admins
+  if(u.is_admin && !isOwner()) return false;
+  // Ban permission required for ban actions (checked separately too)
+  return true;
+}
+
 async function writeAudit(action, opts){
   opts = opts || {};
   if(!sb || !CURRENT_USER) return;
@@ -1022,7 +1081,7 @@ async function writeAudit(action, opts){
 
 async function loadAuditLog(){
   const box = $('auditLogList');
-  if(!box || !CURRENT_USER?.is_admin) return;
+  if(!box || !hasPerm('audit')){ if(box) box.innerHTML = ''; return; }
   box.innerHTML = inlineLoadingHtml('Loading audit log');
   const { data, error } = await sb.from('audit_log').select('*').order('created_at',{ascending:false}).limit(80);
   if(error || !data){ box.innerHTML = '<div class="empty-note">Audit log unavailable — run latest SQL</div>'; return; }
@@ -1331,31 +1390,35 @@ async function enterSession(user, opts){
   hideAllScreens();
   $('mainApp').classList.remove('hidden');
   $('topbarUser').textContent = '@' + user.username;
-  $('navAdmin').classList.toggle('hidden', !user.is_admin);
+  $('navAdmin').classList.toggle('hidden', !(user.is_owner || user.is_admin));
   refreshGameUI();
   startNewRound();
   goPage('game');
-  // Unread badge + realtime ASAP so red number shows without opening Chat
+  // Live account updates (ban / verify / admin / kick) + chat realtime
+  ensureUserRealtime();
   ensureChatRealtime();
   loadUnreadCounts().catch(()=>{});
+  // When tab becomes visible again, re-sync immediately
+  if(!window.__visBound){
+    window.__visBound = true;
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState === 'visible' && CURRENT_USER){
+        syncCurrentUserFromServer();
+      }
+    });
+  }
   refreshSupportBadge();
   loadAnnouncement();
   // keep last_online fresh while app is open
   if(window.__onlineTimer) clearInterval(window.__onlineTimer);
   window.__onlineTimer = setInterval(async ()=>{
     if(!CURRENT_USER) return;
-    sb.from('users').update({ last_online: new Date().toISOString() }).eq('id', CURRENT_USER.id);
-    // Detect mid-session kick from another device
     try{
-      const { data } = await sb.from('devices').select('revoked').eq('device_id', DEVICE_ID).eq('user_id', CURRENT_USER.id).maybeSingle();
-      if(data && data.revoked){
-        localStorage.removeItem('gz_user_id');
-        CURRENT_USER = null;
-        toast('You were logged out from this device');
-        showAuth('login');
-      }
+      await sb.from('users').update({ last_online: new Date().toISOString() }).eq('id', CURRENT_USER.id);
     }catch(e){}
-  }, 60000);
+    // Backup sync if realtime is delayed / not enabled
+    await syncCurrentUserFromServer();
+  }, 15000);
 }
 
 async function registerCurrentDevice(userId){
@@ -1793,7 +1856,9 @@ async function openUserModal(u){
   modalTargetUser = u;
   renderAvatar($('modalAvatar'), u);
   $('modalUname').innerHTML = '@' + escapeHtml(u.username) + verifiedBadgeHtml(u);
-  $('modalAdminBadge').classList.toggle('hidden', !u.is_admin);
+  $('modalAdminBadge').classList.toggle('hidden', !(u.is_admin || u.is_owner));
+  if(u.is_owner){ $('modalAdminBadge').textContent = 'Owner'; $('modalAdminBadge').style.background = 'var(--gold)'; $('modalAdminBadge').style.color = '#000'; }
+  else { $('modalAdminBadge').textContent = 'Staff'; $('modalAdminBadge').style.background = ''; $('modalAdminBadge').style.color = ''; }
   $('modalStatus').textContent = u.banned ? 'Banned' : (isOnline(u.last_online) ? 'Online' : 'Offline');
   $('modalLevel').textContent = u.level + ' (' + levelTitle(u.level) + ')';
   $('modalXp').textContent = `${u.xp} (progress ${u.level_xp}/${u.level_xp_needed})`;
@@ -1804,13 +1869,83 @@ async function openUserModal(u){
   $('modalLastOnline').textContent = fmtDate(u.last_online);
   $('modalLastWin').textContent = fmtDate(u.last_win);
 
-  const showAdmin = CURRENT_USER && CURRENT_USER.is_admin && CURRENT_USER.id !== u.id;
+  const showAdmin = canModerateUser(u) && (hasPerm('ban') || hasPerm('verify') || hasPerm('manage_staff'));
+  const viewingProtectedAdmin = isStaff() && isProtectedTarget(u) && CURRENT_USER.id !== u.id;
+  const canBan = canModerateUser(u) && hasPerm('ban');
+  const canVerify = canModerateUser(u) && hasPerm('verify');
+  const canManageStaff = isOwner() && u.id !== CURRENT_USER.id && !u.is_owner;
   $('adminBanSection').classList.toggle('hidden', !showAdmin);
   $('banForm').classList.add('hidden');
-  $('btnUnban').classList.toggle('hidden', !(showAdmin && u.banned));
-  if(showAdmin){
+  $('btnUnban').classList.toggle('hidden', !(canBan && u.banned));
+  // Hide individual buttons by permission
+  if($('btnBanDevice')) $('btnBanDevice').style.display = canBan ? '' : 'none';
+  if($('btnBanNormal')) $('btnBanNormal').style.display = canBan ? '' : 'none';
+  if($('btnToggleTik')){
+    $('btnToggleTik').style.display = canVerify ? '' : 'none';
     $('btnToggleTik').textContent = u.tik ? 'Remove Verified' : 'Give Verified';
-    $('btnToggleAdmin').textContent = u.is_admin ? 'Revoke Admin' : 'Make Admin';
+  }
+  if($('btnToggleAdmin')){
+    // Only owner can grant/revoke staff
+    $('btnToggleAdmin').style.display = canManageStaff ? '' : 'none';
+    $('btnToggleAdmin').textContent = u.is_admin ? 'Revoke Staff' : 'Make Staff';
+  }
+  // Permission editor (owner only)
+  let permBox = $('staffPermEditor');
+  if(!permBox){
+    permBox = document.createElement('div');
+    permBox.id = 'staffPermEditor';
+    permBox.className = 'hidden';
+    permBox.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);';
+    const banSec = $('adminBanSection');
+    if(banSec) banSec.appendChild(permBox);
+  }
+  if(canManageStaff){
+    permBox.classList.remove('hidden');
+    const perms = getPerms(u);
+    permBox.innerHTML = `<div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text);">Staff permissions</div>` +
+      PERM_KEYS.filter(p=>p.key!=='manage_staff').map(p=>`
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 0;cursor:pointer;">
+          <input type="checkbox" data-perm="${p.key}" ${perms[p.key]?'checked':''} ${u.is_admin?'':'disabled'}>
+          <span>${p.label}</span>
+        </label>`).join('') +
+      `<button type="button" class="btn btn-primary" id="savePermsBtn" style="margin-top:8px;font-size:13px;">Save permissions</button>
+       <div style="font-size:10px;color:var(--text-dim);margin-top:6px;">User must be Staff first. Only the owner can change these.</div>`;
+    const saveBtn = permBox.querySelector('#savePermsBtn');
+    if(saveBtn){
+      saveBtn.onclick = async ()=>{
+        if(!isOwner()){ toast('Only owner can edit permissions'); return; }
+        if(!u.is_admin){ toast('Make them Staff first'); return; }
+        const next = {};
+        permBox.querySelectorAll('[data-perm]').forEach(cb=>{ next[cb.getAttribute('data-perm')] = cb.checked; });
+        next.manage_staff = false; // never grant manage_staff to non-owner
+        const { error } = await sb.from('users').update({ permissions: next }).eq('id', u.id);
+        if(error){ toast(error.message||'Failed'); return; }
+        u.permissions = next;
+        await writeAudit('edit_permissions', { target_user_id: u.id, target_username: u.username, details: next });
+        toast('Permissions saved');
+        openUserModal(u);
+      };
+    }
+  } else {
+    permBox.classList.add('hidden');
+    permBox.innerHTML = '';
+  }
+  let prot = $('adminProtectedNote');
+  if(!prot){
+    prot = document.createElement('div');
+    prot.id = 'adminProtectedNote';
+    prot.style.cssText = 'margin-top:12px;padding:10px 12px;border-radius:12px;border:1px solid var(--border);font-size:12px;color:var(--text-dim);text-align:center;';
+    const banSec = $('adminBanSection');
+    if(banSec && banSec.parentNode) banSec.parentNode.insertBefore(prot, banSec);
+  }
+  if(viewingProtectedAdmin){
+    prot.classList.remove('hidden');
+    prot.textContent = u.is_owner
+      ? 'Owner account — fully protected.'
+      : 'Staff account — only the owner can moderate staff.';
+  } else {
+    prot.classList.add('hidden');
+    prot.textContent = '';
   }
   // Devices (admin sees all of user's devices)
   const devWrap = $('modalDevicesWrap');
@@ -1833,6 +1968,7 @@ async function openUserModal(u){
         }).join('');
         devBox.querySelectorAll('[data-adm-kick]').forEach(btn=>{
           btn.onclick = async ()=>{
+            if(!canModerateUser(u) || !hasPerm('ban')){ toast('No permission'); return; }
             if(!(await askConfirm('Kick device','Revoke this device session?'))) return;
             await sb.from('devices').update({ revoked:true, revoked_at: new Date().toISOString() }).eq('id', btn.getAttribute('data-adm-kick'));
             await writeAudit('kick_device', { target_user_id: u.id, target_username: u.username, details: { device_row: btn.getAttribute('data-adm-kick') } });
@@ -1854,10 +1990,11 @@ $('btnBanDevice').onclick = ()=>{ pendingBanType='device'; $('banForm').classLis
 $('btnBanNormal').onclick = ()=>{ pendingBanType='normal'; $('banForm').classList.remove('hidden'); };
 
 $('confirmBanBtn').onclick = async ()=>{
+  const u = modalTargetUser;
+  if(!canModerateUser(u) || !hasPerm('ban')){ toast('No permission to ban'); return; }
   const reason = $('banReasonInput').value.trim() || 'No reason';
   const untilVal = $('banUntilInput').value;
   const until = untilVal ? new Date(untilVal).toISOString() : null;
-  const u = modalTargetUser;
   if(!(await askConfirm('Confirm ban', `Ban @${u.username} (${pendingBanType})?`))) return;
 
   if(pendingBanType === 'device'){
@@ -1912,6 +2049,7 @@ $('confirmBanBtn').onclick = async ()=>{
 
 $('btnUnban').onclick = async ()=>{
   const u = modalTargetUser;
+  if(!canModerateUser(u) || !hasPerm('ban')){ toast('No permission to ban'); return; }
   if(!(await askConfirm('Remove ban', `Unban @${u.username}?`))) return;
   await sb.from('users').update({
     banned:false, ban_type:null, ban_reason:null, ban_until:null, banned_at:null
@@ -1940,6 +2078,7 @@ $('btnUnban').onclick = async ()=>{
 $('btnToggleTik').onclick = async ()=>{
   const u = modalTargetUser;
   if(!CURRENT_USER?.is_admin) return;
+  if(!canModerateUser(u) || !hasPerm('verify')){ toast('No permission to verify'); return; }
   const next = !u.tik;
   if(!(await askConfirm(next?'Verify user':'Remove verification', `${next?'Give':'Remove'} verified badge for @${u.username}?`))) return;
   await sb.from('users').update({ tik: next }).eq('id', u.id);
@@ -1951,13 +2090,23 @@ $('btnToggleTik').onclick = async ()=>{
 
 $('btnToggleAdmin').onclick = async ()=>{
   const u = modalTargetUser;
-  if(!CURRENT_USER?.is_admin) return;
+  if(!isOwner()){ toast('Only the owner can manage staff'); return; }
+  if(!u || u.id === CURRENT_USER.id || u.is_owner){ toast('Not allowed'); return; }
   const next = !u.is_admin;
-  if(!(await askConfirm(next?'Make admin':'Revoke admin', `${next?'Grant':'Revoke'} admin for @${u.username}?`))) return;
-  await sb.from('users').update({ is_admin: next }).eq('id', u.id);
+  if(!(await askConfirm(next?'Make Staff':'Revoke Staff', (next?'Grant staff role to @':'Remove staff role from @')+u.username+'?'))) return;
+  const defaultPerms = next ? {
+    support: true, reports: true, ban: false, verify: false,
+    chats: false, announce: false, weekly_reset: false, audit: true, manage_staff: false
+  } : {};
+  const { error } = await sb.from('users').update({
+    is_admin: next,
+    permissions: defaultPerms
+  }).eq('id', u.id);
+  if(error){ toast(error.message||'Failed'); return; }
   u.is_admin = next;
-  await writeAudit(next ? 'make_admin' : 'revoke_admin', { target_user_id: u.id, target_username: u.username });
-  toast(next ? 'Admin granted' : 'Admin revoked');
+  u.permissions = defaultPerms;
+  await writeAudit(next ? 'make_admin' : 'revoke_admin', { target_user_id: u.id, target_username: u.username, details: defaultPerms });
+  toast(next ? 'Staff granted — set permissions below' : 'Staff revoked');
   openUserModal(u);
 };
 
@@ -1982,7 +2131,7 @@ function refreshProfileUI(){
   $('profLevelTitle').textContent = levelTitle(u.level);
   const pu = $('profUname');
   if(pu){
-    pu.innerHTML = '@' + escapeHtml(u.username) + ' ' + verifiedBadgeHtml(u) + (u.is_admin ? ' <span class="admin-badge">Admin</span>' : '');
+    pu.innerHTML = '@' + escapeHtml(u.username) + ' ' + verifiedBadgeHtml(u) + (u.is_owner ? ' <span class="admin-badge" style="background:var(--gold);color:#000">Owner</span>' : (u.is_admin ? ' <span class="admin-badge">Staff</span>' : ''));
   }
   // achievements
   const grid = $('achGrid');
@@ -2073,6 +2222,8 @@ $('logoutBtn').onclick = ()=>{
 
 /* ---------- CHAT ---------- */
 let chatPartner = null, chatReplyTarget = null, chatMsgMap = {}, chatChannelSubscribed = false;
+let userRealtimeSubscribed = false;
+let userRealtimeChannel = null;
 let pendingChatImage = null, unreadCounts = {}, adminWatchMode = false, adminWatchPair = null;
 
 async function loadUnreadCounts(){
@@ -2121,6 +2272,103 @@ async function loadChatUsers(){
     renderAvatar(row.querySelector(`#chatAv${idx}`), u);
   });
 }
+
+
+function applyLiveUserUpdate(row){
+  if(!row || !CURRENT_USER || row.id !== CURRENT_USER.id) return;
+  const prev = CURRENT_USER;
+  CURRENT_USER = { ...CURRENT_USER, ...row };
+
+  // Ban took effect while online
+  if(row.banned){
+    const expired = row.ban_until && new Date(row.ban_until) <= new Date();
+    if(!expired){
+      toast('Your account has been restricted');
+      showUserBanScreen(CURRENT_USER);
+      return;
+    }
+  }
+
+  // Admin / verify live updates
+  if(prev.is_admin !== CURRENT_USER.is_admin){
+    if($('navAdmin')) $('navAdmin').classList.toggle('hidden', !isStaff());
+    if(!isStaff() && $('pageAdmin') && !$('pageAdmin').classList.contains('hidden')) goPage('game');
+    toast(CURRENT_USER.is_admin ? 'You are now an admin' : 'Admin access removed');
+  }
+  if(prev.tik !== CURRENT_USER.tik){
+    toast(CURRENT_USER.tik ? 'You received verified badge' : 'Verified badge removed');
+  }
+  if(prev.username && CURRENT_USER.username && prev.username !== CURRENT_USER.username){
+    toast('Username updated');
+  }
+
+  // Live UI refresh
+  try{ refreshGameUI(); }catch(e){}
+  try{
+    if($('pageProfile') && !$('pageProfile').classList.contains('hidden')) refreshProfileUI();
+  }catch(e){}
+  if($('topbarUser') && CURRENT_USER.username){
+    $('topbarUser').textContent = '@' + CURRENT_USER.username;
+  }
+}
+
+async function syncCurrentUserFromServer(){
+  if(!CURRENT_USER || !sb) return;
+  try{
+    const { data } = await sb.from('users').select('*').eq('id', CURRENT_USER.id).maybeSingle();
+    if(data) applyLiveUserUpdate(data);
+  }catch(e){}
+  try{
+    if(DEVICE_ID){
+      const { data: dev } = await sb.from('devices').select('revoked').eq('device_id', DEVICE_ID).eq('user_id', CURRENT_USER.id).maybeSingle();
+      if(dev && dev.revoked){
+        localStorage.removeItem('gz_user_id');
+        CURRENT_USER = null;
+        toast('You were logged out from this device');
+        showAuth('login');
+      }
+    }
+  }catch(e){}
+}
+
+function ensureUserRealtime(){
+  if(!sb || !CURRENT_USER) return;
+  // Always re-bind channel for current user id
+  try{
+    if(userRealtimeChannel){
+      sb.removeChannel(userRealtimeChannel);
+      userRealtimeChannel = null;
+      userRealtimeSubscribed = false;
+    }
+  }catch(e){}
+
+  const uid = CURRENT_USER.id;
+  userRealtimeChannel = sb.channel('user-live-'+uid)
+    .on('postgres_changes', {
+      event: 'UPDATE', schema: 'public', table: 'users', filter: 'id=eq.'+uid
+    }, payload=>{
+      if(payload.new) applyLiveUserUpdate(payload.new);
+    })
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'devices', filter: 'device_id=eq.'+DEVICE_ID
+    }, payload=>{
+      const row = payload.new || payload.old;
+      if(!row) return;
+      if(row.user_id && CURRENT_USER && row.user_id !== CURRENT_USER.id) return;
+      if(row.revoked){
+        localStorage.removeItem('gz_user_id');
+        CURRENT_USER = null;
+        toast('You were logged out from this device');
+        showAuth('login');
+      }
+    })
+    .subscribe((status)=>{
+      // fallback if realtime not enabled
+      if(status === 'SUBSCRIBED') userRealtimeSubscribed = true;
+    });
+  userRealtimeSubscribed = true;
+}
+
 
 function ensureChatRealtime(){
   if(chatChannelSubscribed || !sb) return;
@@ -2356,10 +2604,11 @@ $('supportNewModal').addEventListener('click', e=>{ if(e.target.id==='supportNew
 ['authSupportBtn','banSupportBtn'].forEach(id=>{ const el=$(id); if(el) el.onclick = openSupportNew; });
 
 function refreshSupportMenu(){
-  const isAdm = CURRENT_USER && CURRENT_USER.is_admin;
-  ['menuAdminTickets','menuAdminReports','menuAdminChats','menuAdminDash'].forEach(id=>{
-    const el=$(id); if(el) el.classList.toggle('hidden', !isAdm);
-  });
+  const el = (id)=>$(id);
+  if(el('menuAdminTickets')) el('menuAdminTickets').classList.toggle('hidden', !hasPerm('support'));
+  if(el('menuAdminReports')) el('menuAdminReports').classList.toggle('hidden', !hasPerm('reports'));
+  if(el('menuAdminChats')) el('menuAdminChats').classList.toggle('hidden', !hasPerm('chats'));
+  if(el('menuAdminDash')) el('menuAdminDash').classList.toggle('hidden', !isStaff());
 }
 function closeSupportMenu(){ const m=$('supportMenu'); if(m) m.classList.add('hidden'); }
 function toggleSupportMenu(){
@@ -2417,6 +2666,7 @@ $('supSubmitBtn').onclick = async ()=>{
 };
 
 async function openSupportList(mode){
+  if(mode==='admin' && !hasPerm('support')){ toast('No permission'); return; }
   supportMode = mode;
   $('supportListTitle').textContent = mode==='admin' ? 'Support requests' : 'My tickets';
   $('supportListBody').innerHTML = inlineLoadingHtml('Loading');
@@ -2518,7 +2768,7 @@ if($('repTabOpen')){
 }
 
 async function openReportsList(){
-  if(!CURRENT_USER?.is_admin){ toast('Admins only'); return; }
+  if(!hasPerm('reports')){ toast('No permission'); return; }
   $('reportsListBody').innerHTML = inlineLoadingHtml('Loading');
   $('reportsListModal').classList.remove('hidden');
   let query = sb.from('reports').select('*').order('created_at',{ascending:false}).limit(100);
@@ -2594,7 +2844,7 @@ if($('repMsgReported')) $('repMsgReported').onclick = ()=>{
 };
 
 async function openAdminAllChats(){
-  if(!CURRENT_USER?.is_admin){ toast('Admins only'); return; }
+  if(!hasPerm('chats')){ toast('No permission'); return; }
   $('adminChatsList').innerHTML = inlineLoadingHtml('Loading');
   $('adminChatsModal').classList.remove('hidden');
   const { data: rows, error } = await sb.from('messages').select('sender_id,receiver_id,content,image_url,created_at').order('created_at',{ascending:false}).limit(400);
@@ -2628,7 +2878,23 @@ if($('adminChatsModal')) $('adminChatsModal').addEventListener('click', e=>{ if(
 
 /* ---------- ADMIN DASHBOARD ---------- */
 async function loadAdminDash(){
-  if(!CURRENT_USER?.is_admin){ toast('Admins only'); goPage('game'); return; }
+  if(!isStaff()){ toast('Staff only'); goPage('game'); return; }
+  // Show/hide tools by permission
+  const show = (id, on)=>{ const e=$(id); if(e) e.style.display = on ? '' : 'none'; };
+  show('admBtnTickets', hasPerm('support'));
+  show('admBtnReports', hasPerm('reports'));
+  show('admBtnChats', hasPerm('chats'));
+  show('admBtnResetWeekly', hasPerm('weekly_reset'));
+  show('admBtnAnnounce', hasPerm('announce'));
+  show('admBtnSearchUser', isStaff());
+  const auditWrap = $('auditLogList');
+  if(auditWrap && auditWrap.previousElementSibling){
+    // hide audit section title+list if no perm
+  }
+  if(!hasPerm('audit') && $('auditLogList')){
+    $('auditLogList').innerHTML = '';
+  }
+
   try{
     const [uRes, tRes, rRes, bRes, dRes, wRes] = await Promise.all([
       sb.from('users').select('*',{count:'exact',head:true}),
@@ -2675,6 +2941,7 @@ $('admBtnTickets').onclick = ()=> openSupportList('admin');
 $('admBtnReports').onclick = ()=> openReportsList();
 $('admBtnChats').onclick = ()=> openAdminAllChats();
 $('admBtnResetWeekly').onclick = async ()=>{
+  if(!hasPerm('weekly_reset')){ toast('No permission'); return; }
   if(!(await askConfirm('Reset weekly','Award 👑 to current #1 and reset ONLY weekly wins/guesses for everyone?'))) return;
   try{
     const res = await runWeeklyReset(true); // force
@@ -2693,7 +2960,7 @@ $('admBtnResetWeekly').onclick = async ()=>{
     loadAdminDash();
   }catch(e){ toast(e.message||'Reset failed'); }
 };
-$('admBtnAnnounce').onclick = ()=> $('announceModal').classList.remove('hidden');
+$('admBtnAnnounce').onclick = ()=>{ if(!hasPerm('announce')){ toast('No permission'); return; } $('announceModal').classList.remove('hidden'); };
 $('closeAnnounce').onclick = ()=> $('announceModal').classList.add('hidden');
 $('annSubmit').onclick = async ()=>{
   const title = $('annTitle').value.trim();
