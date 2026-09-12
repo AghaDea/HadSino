@@ -725,6 +725,7 @@ nav.tabbar button.active .ic{color:var(--text);}
       <div class="detail-row"><span>Last seen</span><span id="modalLastOnline">-</span></div>
       <div class="detail-row"><span>Last win</span><span id="modalLastWin">-</span></div>
     </div>
+    <div id="modalSocialActions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;"></div>
     <div id="modalAchievementsWrap" class="hidden" style="margin-top:12px;">
       <div class="section-title" style="margin-top:0;border:none;padding:0 0 6px;font-size:14px;">Achievements</div>
       <div id="modalAchievements"></div>
@@ -1305,9 +1306,16 @@ async function boot(){
     if(devBan){ showDeviceBanScreen(devBan); return; }
     const savedId = localStorage.getItem('gz_user_id');
     if(savedId){
-      const { data: user, error } = await sb.from('users').select('*').eq('id', savedId).maybeSingle();
-      if(!error && user){ await enterSession(user, { fromSaved: true }); return; }
-      localStorage.removeItem('gz_user_id');
+      try{
+        const { data: user, error } = await sb.from('users').select('*').eq('id', savedId).maybeSingle();
+        if(!error && user){
+          await enterSession(user, { fromSaved: true });
+          return;
+        }
+        // Only clear session if user truly missing (not on transient errors)
+        if(!error && !user) localStorage.removeItem('gz_user_id');
+        else if(error){ console.warn('session restore', error); }
+      }catch(e){ console.warn('session restore', e); }
     }
     showAuth('login');
   }catch(e){
@@ -1458,7 +1466,7 @@ async function enterSession(user, opts){
 
   CURRENT_USER = user;
   await sb.from('users').update({ last_online: new Date().toISOString(), device_id: DEVICE_ID }).eq('id', user.id);
-  await registerCurrentDevice(user.id);
+  await registerCurrentDevice(user.id, { allowUnrevoke: !opts.fromSaved });
   // Auto weekly reset when a new ISO week starts (only weekly stats)
   try{ await ensureWeeklyReset(); }catch(e){ console.warn('weekly', e); }
   // reload user in case weekly fields were zeroed
@@ -1478,7 +1486,34 @@ async function enterSession(user, opts){
   // Live account updates (ban / verify / admin / kick) + chat realtime
   ensureUserRealtime();
   ensureChatRealtime();
+  ensureDuelRealtime();
+  if(!window.__duelLeaveBound){
+    window.__duelLeaveBound = true;
+    window.addEventListener('beforeunload', ()=>{
+      if(activeDuel && activeDuel.status==='active' && CURRENT_USER){
+        // best-effort forfeit
+        navigator.sendBeacon && null;
+      }
+    });
+    document.addEventListener('visibilitychange', async ()=>{
+      // soft: if hidden > 2 min mid-duel handled by opponent play
+    });
+  }
+  bindNotifUI();
   loadUnreadCounts().catch(()=>{});
+  loadNotifications().catch(()=>{});
+  refreshDuelState().catch(()=>{});
+  if(window.__socialPoll) clearInterval(window.__socialPoll);
+  window.__socialPoll = setInterval(async ()=>{
+    if(!CURRENT_USER) return;
+    try{ await refreshDuelState(); }catch(e){}
+    try{
+      const { count } = await sb.from('notifications').select('*',{count:'exact',head:true}).eq('user_id', CURRENT_USER.id).eq('is_read', false);
+      const dot = $('notifDot');
+      if(dot) dot.classList.toggle('hidden', !(count>0));
+      if(count>0 && $('notifPanel') && $('notifPanel').classList.contains('open')) loadNotifications();
+    }catch(e){}
+  }, 8000);
   // When tab becomes visible again, re-sync immediately
   if(!window.__visBound){
     window.__visBound = true;
@@ -1502,7 +1537,7 @@ async function enterSession(user, opts){
   }, 15000);
 }
 
-async function registerCurrentDevice(userId){
+async function registerCurrentDevice(userId, { allowUnrevoke } = { allowUnrevoke: true }){
   if(!DEVICE_ID || !userId) return;
   const s = DEVICE_INFO.signals || collectDeviceSignals();
   const row = {
@@ -1515,27 +1550,24 @@ async function registerCurrentDevice(userId){
     timezone: s.timezone || null,
     hardware: 'cores:'+(s.cores||0)+' mem:'+(s.memory||0),
     touch: !!s.touch,
-    last_seen: new Date().toISOString(),
-    revoked: false,
-    revoked_at: null
+    last_seen: new Date().toISOString()
   };
+  if(allowUnrevoke){
+    row.revoked = false;
+    row.revoked_at = null;
+  }
   try{
-    // Deduplicate: keep a single row per (device_id, user_id)
-    const { data: rows } = await sb.from('devices').select('id').eq('device_id', DEVICE_ID).eq('user_id', userId);
+    const { data: rows } = await sb.from('devices').select('id,revoked').eq('device_id', DEVICE_ID).eq('user_id', userId);
     if(rows && rows.length){
-      const keepId = rows[0].id;
-      await sb.from('devices').update(row).eq('id', keepId);
+      const keep = rows[0];
+      // If kicked and this is auto-restore from saved session, do NOT unrevoke here
+      if(keep.revoked && !allowUnrevoke) return;
+      await sb.from('devices').update(row).eq('id', keep.id);
       const extras = rows.slice(1).map(r=>r.id);
-      if(extras.length){
-        await sb.from('devices').delete().in('id', extras);
-      }
+      if(extras.length) await sb.from('devices').delete().in('id', extras);
     } else {
-      await sb.from('devices').insert({ ...row, first_seen: new Date().toISOString() });
+      await sb.from('devices').insert({ ...row, revoked:false, revoked_at:null, first_seen: new Date().toISOString() });
     }
-    // Cleanup long-revoked rows for this user (details already cleared)
-    try{
-      await sb.from('devices').delete().eq('user_id', userId).eq('revoked', true);
-    }catch(e){}
   }catch(e){ console.warn('device register', e); }
 }
 
@@ -1543,9 +1575,12 @@ async function registerCurrentDevice(userId){
 async function checkDeviceRevoked(userId){
   if(!DEVICE_ID || !userId || !sb) return false;
   try{
-    const { data } = await sb.from('devices').select('revoked').eq('device_id', DEVICE_ID).eq('user_id', userId).maybeSingle();
-    if(data && data.revoked){
-      localStorage.removeItem('gz_user_id');
+    const { data, error } = await sb.from('devices').select('id,revoked').eq('device_id', DEVICE_ID).eq('user_id', userId);
+    if(error) return false; // never log out on network/schema errors
+    if(!data || !data.length) return false; // no row yet = not kicked
+    const kicked = data.some(d => d.revoked === true);
+    if(kicked){
+      try{ localStorage.removeItem('gz_user_id'); }catch(e){}
       CURRENT_USER = null;
       toast('This device was removed from the account');
       showAuth('login');
@@ -1701,10 +1736,15 @@ function renderTypedDigits(){
 }
 function startNewRound(){
   const mode = GAME_MODES[gameMode] || GAME_MODES.normal;
-  currentTarget = mode.min + Math.floor(Math.random() * (mode.max - mode.min + 1));
+  if(activeDuel && activeDuel.status==='active' && activeDuel.target_number != null){
+    currentTarget = activeDuel.target_number;
+  } else {
+    currentTarget = mode.min + Math.floor(Math.random() * (mode.max - mode.min + 1));
+  }
   currentGuessCount = 0;
   typedDigits = '';
   guessHistory = [];
+  gameStartAt = Date.now();
   renderTypedDigits();
   renderGuessHistory();
   $('statThisGuesses').textContent = '0';
@@ -1712,8 +1752,15 @@ function startNewRound(){
   rl.className = 'result-label';
   rl.textContent = '';
   const rh = $('rangeHint');
-  if(rh) rh.textContent = mode.label + ' · up to ' + mode.xpBase + ' XP';
+  if(rh){
+    if(activeDuel && activeDuel.status==='active'){
+      rh.textContent = '⚔️ DUEL · ' + mode.label + ' · same number for both';
+    } else {
+      rh.textContent = mode.label + ' · up to ' + mode.xpBase + ' XP';
+    }
+  }
   updateStreakPill();
+  renderDuelBanner();
 }
 function renderGuessHistory(){
   const box = $('guessHistory');
@@ -1859,6 +1906,12 @@ async function registerWin(guesses, modeKey){
       user_id: u.id, mode: mk, target: currentTarget, guesses, won: true, xp_gained: xpGained
     });
   }catch(e){}
+
+  // Staff alert: suspiciously fast / lucky wins
+  try{ await maybeFastWinAlert(mk, guesses, xpGained); }catch(e){}
+
+  // Active duel: first correct guess wins
+  try{ await maybeDuelWinOnGuess(); }catch(e){}
 }
 
 function refreshGameUI(){
@@ -1920,7 +1973,7 @@ async function loadLeaderboard(){
       <div class="lb-rank ${rankClass}">${idx+1}</div>
       <div class="avatar sm" id="lbAv${idx}"></div>
       <div class="lb-name"><div class="u">${usernameWithTik(u)} ${crownTag}</div></div>
-      <div class="lb-stats"><b>${primary}</b><br>${secondary}<br>Lv ${u.level||1}</div>
+      <div class="lb-stats"><b>${primary}</b><br>${secondary}<br>⚔️ ${u.duel_wins||0} · Lv ${u.level||1}</div>
     `;
     row.onclick = ()=> openUserModal(u);
     list.appendChild(row);
@@ -1984,7 +2037,31 @@ async function openUserModal(u){
   $('modalGuesses').textContent = u.total_guesses;
   $('modalStreak').textContent = (u.best_streak||0) + ' (current ' + (u.current_streak||0) + ')';
   $('modalCrowns').textContent = `${u.crowns||0} 🏆 (${u.champion_points||0} pts)`;
+  if($('modalDuelWins')) $('modalDuelWins').textContent = String(u.duel_wins||0);
   $('modalLastOnline').textContent = fmtDate(u.last_online);
+  // Social / duel actions
+  (function(){
+    const box = $('modalSocialActions');
+    if(!box || !CURRENT_USER) return;
+    box.innerHTML = '';
+    if(u.id === CURRENT_USER.id) return;
+    const addBtn = (label, cls, fn)=>{
+      const b=document.createElement('button');
+      b.type='button'; b.className=cls||'btn btn-ghost';
+      b.style.cssText='width:auto;flex:1;min-width:110px;padding:10px;font-size:12px;border-radius:999px;';
+      b.textContent=label; b.onclick=fn; box.appendChild(b);
+    };
+    if(isOnline(u.last_online)){
+      addBtn('⚔️ Challenge duel', 'btn-duel', ()=>{ $('userModal').classList.add('hidden'); openDuelChallenge(u); });
+    }
+    addBtn('Add friend', 'btn btn-ghost', ()=> sendFriendRequest(u));
+    addBtn('Message', 'btn btn-ghost', ()=>{ $('userModal').classList.add('hidden'); goPage('chat'); openConversation(u); });
+    if(hasPerm('ban') || isOwner()){
+      addBtn('Mute 1h', 'btn btn-ghost', ()=> muteUser(u, 1, '1 hour mute'));
+      addBtn('Mute 24h', 'btn btn-ghost', ()=> muteUser(u, 24, '24 hour mute'));
+    }
+  })();
+
   $('modalLastWin').textContent = fmtDate(u.last_win);
   // Achievements: only unlocked for this user
   (function(){
@@ -2262,6 +2339,20 @@ function refreshProfileUI(){
   $('profWins').textContent = u.total_wins;
   $('profGuesses').textContent = u.total_guesses;
   $('profCrowns').textContent = `${u.crowns||0} 🏆`;
+  // Duel wins box
+  (function(){
+    let el = $('profDuelWins');
+    if(!el){
+      const grid = document.querySelector('#pageProfile .stat-grid');
+      if(grid){
+        const box=document.createElement('div'); box.className='box';
+        box.innerHTML = '<b id="profDuelWins">0</b><span>Duel wins</span>';
+        grid.appendChild(box);
+        el = box.querySelector('#profDuelWins');
+      }
+    }
+    if(el) el.textContent = String(u.duel_wins||0);
+  })();
   const wins = Number(u.total_wins||0), guesses = Number(u.total_guesses||0);
   $('profAvg').textContent = wins > 0 ? (guesses/wins).toFixed(1) : '—';
   $('profStreak').textContent = u.best_streak || 0;
@@ -2322,10 +2413,23 @@ $('avatarUploadLabel').onclick = ()=> $('avatarUpload').click();
 $('avatarUpload').onchange = async (e)=>{
   const file = e.target.files[0]; if(!file) return;
   if(file.size > 2_200_000){ toast('Image must be under ~2MB'); return; }
+  // Prefer Supabase Storage bucket "avatars" when available; fallback to data URL
+  try{
+    const pathName = CURRENT_USER.id + '/' + Date.now() + '-' + (file.name||'avatar').replace(/[^a-zA-Z0-9._-]/g,'_');
+    const { error: upErr } = await sb.storage.from('avatars').upload(pathName, file, { upsert:true, contentType: file.type||'image/jpeg' });
+    if(!upErr){
+      const { data: pub } = sb.storage.from('avatars').getPublicUrl(pathName);
+      const url = pub && pub.publicUrl;
+      if(url){
+        const { data: updated, error } = await sb.from('users').update({ avatar_url: url }).eq('id', CURRENT_USER.id).select().single();
+        if(!error && updated){ CURRENT_USER = updated; refreshProfileUI(); refreshGameUI(); toast('Picture updated'); return; }
+      }
+    }
+  }catch(e){ console.warn('storage avatar', e); }
   const reader = new FileReader();
   reader.onload = async ()=>{
     const { data: updated, error } = await sb.from('users').update({ avatar_url: reader.result }).eq('id', CURRENT_USER.id).select().single();
-    if(!error){ CURRENT_USER = updated; refreshProfileUI(); refreshGameUI(); toast('Picture updated'); }
+    if(!error && updated){ CURRENT_USER = updated; refreshProfileUI(); refreshGameUI(); toast('Picture updated'); }
   };
   reader.readAsDataURL(file);
 };
@@ -2693,6 +2797,11 @@ async function sendChatMessage(){
   if(!text && !image) return;
   if(!chatPartner) return;
   if(!rateOk('lastChat', RATE.chatMs)){ toast('Slow down'); return; }
+  const muted = await isUserMuted(CURRENT_USER.id);
+  if(muted){
+    toast('You are muted until '+fmtDate(muted.muted_until));
+    return;
+  }
   const payload = {
     sender_id: CURRENT_USER.id, receiver_id: chatPartner.id,
     content: text||null, image_url: image||null,
@@ -3102,6 +3211,7 @@ async function loadAdminDash(){
     renderAvatar(row.querySelector(`#admAv${idx}`), u);
   });
   loadAuditLog();
+  loadStaffAlerts();
 }
 $('admBtnTickets').onclick = ()=> openSupportList('admin');
 $('admBtnReports').onclick = ()=> openReportsList();
@@ -3143,13 +3253,7 @@ $('annSubmit').onclick = async ()=>{
   $('announceModal').classList.add('hidden');
   loadAnnouncement();
 };
-$('admBtnSearchUser').onclick = async ()=>{
-  const name = prompt('Username to find:');
-  if(!name) return;
-  const { data } = await sb.from('users').select('*').ilike('username', `%${name.trim()}%`).limit(5);
-  if(!data||!data.length){ toast('Not found'); return; }
-  openUserModal(data[0]);
-};
+$('admBtnSearchUser').onclick = ()=> adminGlobalSearch();
 
 async function loadAnnouncement(){
   const banner = $('annBanner');
@@ -3163,7 +3267,387 @@ async function loadAnnouncement(){
   }catch(e){ banner.classList.add('hidden'); }
 }
 
+
+/* ========== DUELS + ALERTS + MUTE + FRIENDS + NOTIFS + ADMIN SEARCH ========== */
+async function pushNotification(userId, kind, title, body, meta){
+  if(!sb || !userId) return false;
+  try{
+    const { error } = await sb.from('notifications').insert({
+      user_id: userId, kind, title, body: body||'', meta: meta||{}, is_read: false
+    });
+    if(error){
+      console.warn('notif', error);
+      if(/relation|does not exist/i.test(error.message||'')) toast('Run SQL: notifications table missing');
+      return false;
+    }
+    return true;
+  }catch(e){ console.warn('notif', e); return false; }
+}
+
+async function loadNotifications(){
+  const panel = $('notifPanel');
+  if(!panel || !CURRENT_USER) return;
+  const { data } = await sb.from('notifications').select('*').eq('user_id', CURRENT_USER.id).order('created_at',{ascending:false}).limit(40);
+  const list = data||[];
+  const unread = list.filter(n=>!n.is_read).length;
+  const dot = $('notifDot');
+  if(dot) dot.classList.toggle('hidden', unread===0);
+  panel.innerHTML = `<div style="padding:12px 14px;font-weight:800;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+    Notifications ${unread?`<span style="color:var(--accent);font-size:12px;">${unread} new</span>`:''}
+  </div>` + (list.length? list.map(n=>`
+    <div class="notif-item ${n.is_read?'':'unread'}" data-nid="${n.id}" data-kind="${escapeHtml(n.kind)}" data-meta='${escapeHtml(JSON.stringify(n.meta||{}))}'>
+      <div class="n-title">${escapeHtml(n.title)}</div>
+      <div class="n-body">${escapeHtml(n.body||'')} · ${fmtDate(n.created_at)}</div>
+    </div>`).join('') : '<div class="empty-note">No notifications</div>');
+  panel.querySelectorAll('.notif-item').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = el.getAttribute('data-nid');
+      try{ await sb.from('notifications').update({ is_read:true }).eq('id', id); }catch(e){}
+      const kind = el.getAttribute('data-kind');
+      let meta={}; try{ meta=JSON.parse(el.getAttribute('data-meta')||'{}'); }catch(e){}
+      if(kind==='duel_challenge' || kind==='duel_update'){
+        $('notifPanel').classList.remove('open');
+        await refreshDuelState();
+        goPage('game');
+        toast('Open Game tab for duel Accept / play');
+      } else if(kind==='friend_request' && meta.from){
+        const ok = await askConfirm('Friend request', 'Accept friend request?');
+        if(ok) await acceptFriend(meta.from);
+      }
+      loadNotifications();
+    };
+  });
+}
+
+function bindNotifUI(){
+  const btn = $('notifBtn');
+  if(!btn || btn._bound) return;
+  btn._bound = true;
+  btn.onclick = (e)=>{
+    e.stopPropagation();
+    const p = $('notifPanel');
+    if(!p) return;
+    p.classList.toggle('open');
+    if(p.classList.contains('open')) loadNotifications();
+  };
+  document.addEventListener('click', ()=>{ const p=$('notifPanel'); if(p) p.classList.remove('open'); });
+}
+
+async function maybeFastWinAlert(modeKey, guesses, xp){
+  if(!CURRENT_USER || !sb) return;
+  const elapsed = gameStartAt ? (Date.now() - gameStartAt) : 99999;
+  const hardModes = (modeKey==='hard' || modeKey==='extreme');
+  const suspicious = (guesses <= 2 && elapsed < 4000) || (hardModes && guesses <= 3 && elapsed < 6000) || (guesses === 1 && elapsed < 2500);
+  if(!suspicious) return;
+  await sb.from('staff_alerts').insert({
+    user_id: CURRENT_USER.id,
+    username: CURRENT_USER.username,
+    kind: 'fast_win',
+    details: { mode: modeKey, guesses, ms: elapsed, xp }
+  });
+}
+
+async function isUserMuted(userId){
+  const { data } = await sb.from('user_mutes').select('*').eq('user_id', userId).gt('muted_until', new Date().toISOString()).order('muted_until',{ascending:false}).limit(1);
+  return data && data[0] ? data[0] : null;
+}
+
+async function muteUser(u, hours, reason){
+  if(!hasPerm('ban') && !isOwner()){ toast('No permission'); return; }
+  const until = new Date(Date.now() + hours*3600*1000).toISOString();
+  await sb.from('user_mutes').insert({
+    user_id: u.id, muted_until: until, reason: reason||'Muted by staff', muted_by: CURRENT_USER.id
+  });
+  await pushNotification(u.id, 'mute', 'Chat muted', `You are muted until ${fmtDate(until)}. ${reason||''}`);
+  await writeAudit('mute', { target_user_id:u.id, target_username:u.username, details:{ hours, reason } });
+  toast('User muted');
+}
+
+async function sendFriendRequest(u){
+  if(!CURRENT_USER || !u || u.id===CURRENT_USER.id) return;
+  try{
+    const { error } = await sb.from('friendships').insert({
+      user_id: CURRENT_USER.id, friend_id: u.id, status: 'pending'
+    });
+    if(error){
+      if(String(error.code)==='23505' || /duplicate/i.test(error.message||'')){
+        toast('Already sent or already friends');
+      } else if(/relation|does not exist|friendships/i.test(error.message||'')){
+        toast('Run SQL: friendships table missing');
+      } else toast(error.message||'Friend request failed');
+      return;
+    }
+    const n = await pushNotification(u.id, 'friend_request', 'Friend request', '@'+CURRENT_USER.username+' sent you a friend request', { from: CURRENT_USER.id });
+    toast(n ? 'Friend request sent' : 'Request saved (notification may need SQL)');
+  }catch(e){ toast(e.message||'Friend request failed'); }
+}
+
+async function acceptFriend(fromId){
+  await sb.from('friendships').update({ status:'accepted' }).eq('user_id', fromId).eq('friend_id', CURRENT_USER.id);
+  await sb.from('friendships').upsert({ user_id: CURRENT_USER.id, friend_id: fromId, status:'accepted' });
+  await pushNotification(fromId, 'friend_accept', 'Friend accepted', `@${CURRENT_USER.username} accepted your request`);
+  toast('Friend added');
+}
+
+function renderDuelBanner(){
+  const box = $('duelBanner');
+  if(!box) return;
+  if(!activeDuel){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  box.classList.remove('hidden');
+  const otherId = activeDuel.challenger_id===CURRENT_USER.id ? activeDuel.opponent_id : activeDuel.challenger_id;
+  if(activeDuel.status==='pending' && activeDuel.opponent_id===CURRENT_USER.id){
+    box.innerHTML = `<b>⚔️ Duel challenge</b> — mode <b>${escapeHtml(activeDuel.mode)}</b>
+      <div class="duel-actions">
+        <button type="button" class="btn-accept" id="duelAcceptBtn">Accept</button>
+        <button type="button" class="btn-decline" id="duelDeclineBtn">Decline</button>
+      </div>`;
+    $('duelAcceptBtn').onclick = ()=> acceptDuel(activeDuel.id);
+    $('duelDeclineBtn').onclick = ()=> declineDuel(activeDuel.id);
+  } else if(activeDuel.status==='pending'){
+    box.innerHTML = `<b>⚔️ Waiting</b> for opponent to accept (${escapeHtml(activeDuel.mode)})…
+      <div class="duel-actions"><button type="button" class="btn-decline" id="duelCancelBtn">Cancel</button></div>`;
+    $('duelCancelBtn').onclick = ()=> cancelDuel(activeDuel.id);
+  } else if(activeDuel.status==='active'){
+    box.innerHTML = `<b>⚔️ DUEL LIVE</b> · ${escapeHtml(activeDuel.mode)} · first to find the number wins
+      <div class="duel-actions"><button type="button" class="btn-decline" id="duelForfeitBtn">Forfeit</button></div>`;
+    $('duelForfeitBtn').onclick = ()=> forfeitDuel(activeDuel.id);
+  } else {
+    box.classList.add('hidden');
+  }
+}
+
+async function refreshDuelState(){
+  if(!CURRENT_USER || !sb) return;
+  const { data } = await sb.from('duels').select('*')
+    .or(`challenger_id.eq.${CURRENT_USER.id},opponent_id.eq.${CURRENT_USER.id}`)
+    .in('status', ['pending','active'])
+    .order('created_at',{ascending:false}).limit(1);
+  activeDuel = (data && data[0]) || null;
+  if(activeDuel && activeDuel.status==='active'){
+    if(activeDuel.mode && GAME_MODES[activeDuel.mode]) gameMode = activeDuel.mode;
+    // sync target
+    if(activeDuel.target_number != null && currentTarget !== activeDuel.target_number){
+      // keep playing current if mid-round? force target
+      currentTarget = activeDuel.target_number;
+    }
+  }
+  renderDuelBanner();
+}
+
+async function openDuelChallenge(u){
+  if(!CURRENT_USER || !u || u.id===CURRENT_USER.id) return;
+  if(!isOnline(u.last_online)){
+    const ok = await askConfirm('User may be offline', '@'+u.username+' is not recently online. Send duel challenge anyway?');
+    if(!ok) return;
+  }
+  pendingDuelTarget = u;
+  if($('duelModalText')) $('duelModalText').textContent = 'Challenge @'+u.username+' to a duel';
+  if($('duelModal')) $('duelModal').classList.remove('hidden');
+  else toast('Duel UI missing — refresh page');
+}
+if(typeof window!=='undefined'){
+  // bind later
+}
+
+async function sendDuelChallenge(){
+  if(!pendingDuelTarget || !CURRENT_USER){ toast('No opponent selected'); return; }
+  const mode = ($('duelModeSelect') && $('duelModeSelect').value) || 'normal';
+  try{
+    await refreshDuelState();
+    if(activeDuel && (activeDuel.status==='pending' || activeDuel.status==='active')){
+      toast('You already have an open duel'); return;
+    }
+    const { data, error } = await sb.from('duels').insert({
+      challenger_id: CURRENT_USER.id,
+      opponent_id: pendingDuelTarget.id,
+      mode, status: 'pending'
+    }).select().single();
+    if(error){
+      if(/relation|does not exist|duels/i.test(error.message||'')) toast('Run SQL: duels table missing');
+      else toast(error.message||'Duel failed');
+      return;
+    }
+    activeDuel = data;
+    await pushNotification(pendingDuelTarget.id, 'duel_challenge', 'Duel challenge', '@'+CURRENT_USER.username+' challenged you ('+mode+')', { duel_id: data.id });
+    if($('duelModal')) $('duelModal').classList.add('hidden');
+    toast('Challenge sent — opponent will see it in 🔔 and on Game');
+    renderDuelBanner();
+    goPage('game');
+  }catch(e){ toast(e.message||'Duel failed'); }
+}
+
+async function acceptDuel(id){
+  const mode = (activeDuel && activeDuel.mode) || 'normal';
+  const m = GAME_MODES[mode] || GAME_MODES.normal;
+  const target = m.min + Math.floor(Math.random() * (m.max - m.min + 1));
+  const { data, error } = await sb.from('duels').update({
+    status: 'active', target_number: target, started_at: new Date().toISOString()
+  }).eq('id', id).eq('status','pending').select().single();
+  if(error || !data){ toast('Could not accept'); await refreshDuelState(); return; }
+  activeDuel = data;
+  gameMode = mode;
+  // notify challenger
+  const other = data.challenger_id === CURRENT_USER.id ? data.opponent_id : data.challenger_id;
+  await pushNotification(other, 'duel_update', 'Duel started!', 'Opponent accepted. First to win the number takes the duel.', { duel_id: id });
+  startNewRound();
+  toast('Duel started!');
+  renderDuelBanner();
+  goPage('game');
+}
+
+async function declineDuel(id){
+  await sb.from('duels').update({ status:'declined', finished_at: new Date().toISOString() }).eq('id', id);
+  if(activeDuel && activeDuel.challenger_id){
+    await pushNotification(activeDuel.challenger_id, 'duel_update', 'Duel declined', `@${CURRENT_USER.username} declined your duel`);
+  }
+  activeDuel = null;
+  renderDuelBanner();
+  toast('Declined');
+}
+
+async function cancelDuel(id){
+  await sb.from('duels').update({ status:'cancelled', finished_at: new Date().toISOString() }).eq('id', id);
+  activeDuel = null;
+  renderDuelBanner();
+  toast('Cancelled');
+}
+
+async function forfeitDuel(id){
+  if(!(await askConfirm('Forfeit','Leave the duel? Opponent wins.'))) return;
+  await finishDuel(id, null, CURRENT_USER.id);
+}
+
+async function maybeDuelWinOnGuess(){
+  if(!activeDuel || activeDuel.status!=='active') return;
+  await finishDuel(activeDuel.id, CURRENT_USER.id, null);
+}
+
+async function finishDuel(duelId, winnerId, forfeitId){
+  const { data: d0 } = await sb.from('duels').select('*').eq('id', duelId).maybeSingle();
+  if(!d0 || d0.status==='finished' || d0.status==='cancelled') return;
+  let winner = winnerId;
+  if(forfeitId){
+    winner = d0.challenger_id === forfeitId ? d0.opponent_id : d0.challenger_id;
+  }
+  if(!winner) return;
+  const { data: d, error } = await sb.from('duels').update({
+    status: 'finished',
+    winner_id: winner,
+    forfeit_id: forfeitId||null,
+    finished_at: new Date().toISOString()
+  }).eq('id', duelId).in('status',['active','pending']).select().single();
+  if(error || !d){ await refreshDuelState(); return; }
+
+  // award winner
+  try{
+    const { data: wuser } = await sb.from('users').select('*').eq('id', winner).maybeSingle();
+    if(wuser){
+      const dw = (Number(wuser.duel_wins)||0) + 1;
+      let ach = Array.isArray(wuser.achievements)? [...wuser.achievements]:[];
+      const tmp = { ...wuser, duel_wins: dw };
+      ACHIEVEMENTS.forEach(a=>{ if(!ach.includes(a.id) && a.check(tmp)) ach.push(a.id); });
+      await sb.from('users').update({ duel_wins: dw, achievements: ach }).eq('id', winner);
+      if(CURRENT_USER && CURRENT_USER.id === winner){
+        CURRENT_USER.duel_wins = dw;
+        CURRENT_USER.achievements = ach;
+        refreshProfileUI();
+        refreshGameUI();
+      }
+    }
+  }catch(e){}
+
+  const loser = d.challenger_id === winner ? d.opponent_id : d.challenger_id;
+  await pushNotification(winner, 'duel_update', '🏆 Duel won!', forfeitId ? 'Opponent left. You win the duel.' : 'You found the number first!');
+  await pushNotification(loser, 'duel_update', 'Duel lost', forfeitId && forfeitId===loser ? 'You left the duel.' : 'Opponent found the number first.');
+
+  if(CURRENT_USER && (CURRENT_USER.id===winner)) toast('🏆 You won the duel!');
+  else if(CURRENT_USER && CURRENT_USER.id===loser) toast('Duel over — you lost');
+
+  activeDuel = null;
+  renderDuelBanner();
+  // next normal round
+  if(CURRENT_USER && (CURRENT_USER.id===d.challenger_id || CURRENT_USER.id===d.opponent_id)){
+    setTimeout(()=> startNewRound(), 600);
+  }
+}
+
+function ensureDuelRealtime(){
+  if(!sb || !CURRENT_USER || window.__duelRt) return;
+  window.__duelRt = true;
+  sb.channel('duels-live')
+    .on('postgres_changes', { event:'*', schema:'public', table:'duels' }, payload=>{
+      const row = payload.new || payload.old;
+      if(!row || !CURRENT_USER) return;
+      if(row.challenger_id!==CURRENT_USER.id && row.opponent_id!==CURRENT_USER.id) return;
+      refreshDuelState().then(()=>{
+        if(row.status==='active' && payload.eventType==='UPDATE'){
+          if(GAME_MODES[row.mode]) gameMode = row.mode;
+          startNewRound();
+          toast('⚔️ Duel is live!');
+          goPage('game');
+        }
+        if(row.status==='finished'){
+          activeDuel = null;
+          renderDuelBanner();
+        }
+      });
+    })
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'notifications', filter:'user_id=eq.'+CURRENT_USER.id }, ()=>{
+      loadNotifications();
+      const dot=$('notifDot'); if(dot) dot.classList.remove('hidden');
+    })
+    .subscribe();
+}
+
+async function adminGlobalSearch(){
+  const q = prompt('Search username, ticket title, or report reason:');
+  if(!q || !q.trim()) return;
+  const s = q.trim();
+  let html = '';
+  const { data: users } = await sb.from('users').select('*').ilike('username', '%'+s+'%').limit(8);
+  if(users&&users.length){
+    html += '<div class="section-title">Users</div>';
+    users.forEach(u=>{
+      const row = document.createElement('div');
+      // open modal helper later
+    });
+  }
+  const results = [];
+  (users||[]).forEach(u=> results.push({type:'user', u}));
+  const { data: tickets } = await sb.from('support_tickets').select('*').ilike('title', '%'+s+'%').limit(5);
+  (tickets||[]).forEach(t=> results.push({type:'ticket', t}));
+  if(!results.length){ toast('Nothing found'); return; }
+  // simple: if user found open first user
+  if(users && users[0]) openUserModal(users[0]);
+  else if(tickets && tickets[0]) openSupportDetail(tickets[0]);
+  else toast('Found '+results.length+' results');
+}
+
+async function loadStaffAlerts(){
+  if(!isStaff()) return;
+  const box = $('staffAlertsList');
+  if(!box) return;
+  const { data } = await sb.from('staff_alerts').select('*').order('created_at',{ascending:false}).limit(30);
+  if(!data||!data.length){ box.innerHTML = '<div class="empty-note">No alerts</div>'; return; }
+  box.innerHTML = data.map(a=>`<div class="audit-row" style="cursor:pointer;" data-uid="${a.user_id||''}">
+    <div><span class="a-act">⚡ ${escapeHtml(a.kind)}</span> @${escapeHtml(a.username||'?')}</div>
+    <div class="a-meta">${fmtDate(a.created_at)} · ${escapeHtml(JSON.stringify(a.details||{}))}</div>
+  </div>`).join('');
+  box.querySelectorAll('[data-uid]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = el.getAttribute('data-uid');
+      if(!id) return;
+      const { data:u } = await sb.from('users').select('*').eq('id', id).maybeSingle();
+      if(u) openUserModal(u);
+    };
+  });
+}
+
+/* ========== end extras ========== */
+
 /* ---------- INIT ---------- */
+if($('closeDuelModal')) $('closeDuelModal').onclick = ()=> $('duelModal').classList.add('hidden');
+if($('duelSendBtn')) $('duelSendBtn').onclick = ()=> sendDuelChallenge();
 buildKeypad();
 initModeTabs();
 boot();
