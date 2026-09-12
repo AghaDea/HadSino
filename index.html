@@ -1,1 +1,8 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Temporarily Unavailable</title><style>body{margin:0;background:#0b0b0b;color:#ddd;font:16px Arial;text-align:center;display:grid;place-items:center;height:100vh}p{color:#888}</style></head><body><div><h3>Something went wrong</h3><p>We are currently updating the service.<br>Please try again later.</p></div></body></html>
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Temporarily Unavailable</title><style>body{margin:0;background:#0b0b0b;color:#ddd;font:16px Arial;text-align:center;display:grid;place-items:center;height:100vh}p{color:#888}</style></head><body><div><h3>Something went wrong</h3><p>We are currently updating the service.<br>Please try again later.</p></div></body><script>
+if (!sessionStorage.getItem("reloaded")) {
+    sessionStorage.setItem("reloaded", "1");
+    setTimeout(() => location.reload(), 1000);
+} else {
+    sessionStorage.removeItem("reloaded");
+}
+</script></html>
