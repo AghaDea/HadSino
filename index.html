@@ -228,9 +228,15 @@ nav.tabbar button.active .ic{color:var(--accent);}
 .chat-back{background:none;border:none;color:var(--text);font-size:20px;padding:4px 6px;}
 .convo-name{font-weight:700;font-size:15px;}
 .chat-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;}
-.msg{max-width:78%;padding:8px 11px;border-radius:14px;position:relative;font-size:14px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere;}
-.msg.mine{align-self:flex-start;background:var(--green);color:#fff;border-bottom-right-radius:4px;}
-.msg.theirs{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-left-radius:4px;}
+.msg{max-width:78%;padding:9px 12px;border-radius:16px;position:relative;font-size:14px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere;box-shadow:0 1px 2px rgba(0,0,0,.12);}
+.msg.mine{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:5px;}
+.msg.theirs{align-self:flex-start;background:var(--bg-elev);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:5px;}
+.msg.theirs .msg-text{color:var(--text);}
+.msg.theirs .msg-actions{color:var(--text-dim);}
+.msg.mine .msg-actions{color:rgba(255,255,255,.85);}
+.chat-messages{background:var(--bg);}
+.chat-convo-header{background:rgba(0,0,0,.88);}
+.chat-input-row{background:rgba(0,0,0,.88);}
 .msg-quote{background:rgba(0,0,0,.22);border-left:3px solid rgba(255,255,255,.65);padding:4px 7px;border-radius:7px;margin-bottom:5px;font-size:12px;opacity:.9;}
 .msg-img{max-width:100%;border-radius:10px;margin-bottom:5px;display:block;}
 .msg-text{white-space:pre-wrap;}
@@ -579,6 +585,20 @@ html[data-theme="light"] .notif-panel{background:#fff;border-color:var(--border)
 html[data-theme="light"] .notif-panel-header{background:#fff;border-color:var(--border);}
 html[data-theme="light"] .clan-members-scroll{background:#f7f9fb;border-color:var(--border);}
 html[data-theme="light"] .clan-stat-pill{background:#f7f9fb;border-color:var(--border);}
+html[data-theme="light"] .msg.mine{background:var(--accent);color:#fff;}
+html[data-theme="light"] .msg.theirs{background:#eef2f6;color:var(--text);border-color:var(--border);}
+html[data-theme="light"] .chat-convo-header,
+html[data-theme="light"] .chat-input-row{background:rgba(255,255,255,.95);}
+html[data-theme="light"] .chat-messages{background:var(--bg);}
+html[data-theme="light"] .keypad button,
+html[data-theme="light"] .guess-display{background:#fff;}
+html[data-theme="light"] #app{background:#fff;}
+html[data-theme="light"] main{background:#fff;}
+html[data-theme="light"] .lb-row{background:transparent;}
+html[data-theme="light"] nav.tabbar button{color:var(--text-dim);}
+html[data-theme="light"] nav.tabbar button.active{color:var(--text);}
+html[data-theme="light"] .reply-bar{background:#fff;}
+
 
 
 /* Notifications */
@@ -623,14 +643,17 @@ html[data-theme="light"] .clan-stat-pill{background:#f7f9fb;border-color:var(--b
 
 /* Clan tag badge */
 .clan-tag{
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:10px;font-weight:800;letter-spacing:.4px;
-  padding:2px 6px;border-radius:6px;margin-inline-start:4px;
-  color:#fff;line-height:1.2;vertical-align:middle;
-  text-shadow:0 1px 1px rgba(0,0,0,.25);
-  max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  display:inline;font-size:inherit;font-weight:800;letter-spacing:.2px;
+  padding:0;margin:0;border-radius:0;background:none !important;
+  line-height:inherit;vertical-align:baseline;
+  max-width:none;text-shadow:none;
 }
-.clan-tag-sm{font-size:9px;padding:1px 5px;}
+.clan-tag-sm{font-size:inherit;padding:0;}
+.clan-tag-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;letter-spacing:.3px;
+  padding:3px 8px;border-radius:8px;color:#fff;line-height:1.2;
+}
 .theme-toggle-btn{
   width:auto;padding:5px 10px;font-size:14px;border-radius:999px;
   border:1px solid var(--border);background:transparent;color:var(--text);
@@ -760,7 +783,6 @@ html[data-theme="light"] .clan-stat-pill{background:#f7f9fb;border-color:var(--b
         <div class="lb-tabs">
           <button id="tabGlobal" class="active">Global</button>
           <button id="tabWeekly">This Week</button>
-          <button id="tabClans">Clans</button>
         </div>
         <div class="search-wrap"><input id="lbSearch" placeholder="Search..."></div>
         <div id="myRankCard" class="my-rank-card hidden"></div>
@@ -816,18 +838,20 @@ html[data-theme="light"] .clan-stat-pill{background:#f7f9fb;border-color:var(--b
         <div class="field"><input id="editPassword" type="password" maxlength="15" placeholder="New password (3–15)"></div>
         <button class="btn btn-ghost" id="savePasswordBtn">Save password</button>
 
-        <div class="section-title">Clan / Team</div>
-        <div id="clanProfileBox" class="clan-card" style="margin:0 16px 12px;">
-          <div class="inline-loading">Loading clan…</div>
-        </div>
-        <div style="padding:0 16px 8px;display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-ghost" id="clanCreateBtn" style="flex:1;min-width:120px;margin:0;">Create clan</button>
-          <button class="btn btn-ghost" id="clanBrowseBtn" style="flex:1;min-width:120px;margin:0;">Browse / Join</button>
-          <button class="btn btn-ghost" id="clanManageBtn" style="flex:1;min-width:120px;margin:0;">Manage</button>
-        </div>
-
         <div class="section-title">Account</div>
         <button class="btn btn-primary" id="logoutBtn" style="background:var(--red);">Log Out</button>
+      </section>
+
+
+      <!-- CLANS -->
+      <section id="pageClans" class="hidden">
+        <div class="search-wrap"><input id="clansPageSearch" placeholder="Search clans..."></div>
+        <div id="myClanCard" class="my-rank-card hidden" style="cursor:pointer;"></div>
+        <div style="padding:8px 16px;display:flex;gap:8px;">
+          <button class="btn btn-ghost" id="clanCreateBtn" style="flex:1;margin:0;">Create clan</button>
+          <button class="btn btn-ghost" id="clanManageBtn" style="flex:1;margin:0;display:none;">Manage my clan</button>
+        </div>
+        <div class="card" style="padding:4px 0;"><div id="clansPageList"></div></div>
       </section>
 
       <!-- CHAT -->
@@ -866,6 +890,7 @@ html[data-theme="light"] .clan-stat-pill{background:#f7f9fb;border-color:var(--b
     <nav class="tabbar">
       <button id="navGame" class="active"><span class="ic">🎮</span>Game</button>
       <button id="navLeaderboard"><span class="ic">👑</span>Leaderboard</button>
+      <button id="navClans"><span class="ic">🛡️</span>Clans</button>
       <button id="navChat"><span class="ic">💬</span>Chat<span class="tab-badge hide" id="chatTabBadge">0</span></button>
       <button id="navProfile"><span class="ic">⚙️</span>Profile</button>
       <button id="navAdmin" class="hidden"><span class="ic">🌐</span>Admin</button>
@@ -1247,10 +1272,15 @@ function clanTagHtml(user, sm){
   if(!tag) return '';
   const safe = escapeHtml(String(tag).toUpperCase().slice(0,5));
   const col = escapeHtml(String(color));
-  return `<span class="clan-tag${sm?' clan-tag-sm':''}" style="background:${col};" title="Clan">${safe}</span>`;
+  // format: @(TAG) before name is handled by usernameWithTik
+  return `<span class="clan-tag" style="color:${col};" title="Clan">${safe}</span>`;
 }
 function usernameWithTik(user){
-  return escapeHtml(user.username||'?') + verifiedBadgeHtml(user) + clanTagHtml(user);
+  const tag = clanTagHtml(user);
+  const name = escapeHtml(user.username||'?');
+  // @(TAG)Name  — tag colored, no background
+  if(tag) return '@(' + tag + ')' + name + verifiedBadgeHtml(user);
+  return '@' + name + verifiedBadgeHtml(user);
 }
 
 let CURRENT_USER = null;
@@ -1884,19 +1914,21 @@ async function kickAllOtherDevices(){
 
 /* ---------- NAV ---------- */
 function goPage(page){
-  ['Game','Leaderboard','Profile','Chat','Admin'].forEach(p=>{
+  ['Game','Leaderboard','Clans','Profile','Chat','Admin'].forEach(p=>{
     const sec = $('page'+p);
     const nav = $('nav'+p);
     if(sec) sec.classList.toggle('hidden', p.toLowerCase() !== page);
     if(nav) nav.classList.toggle('active', p.toLowerCase() === page);
   });
   if(page === 'leaderboard') loadLeaderboard();
+  if(page === 'clans') loadClansPage();
   if(page === 'profile') refreshProfileUI();
   if(page === 'chat') loadChatUsers();
   if(page === 'admin') loadAdminDash();
 }
 $('navGame').onclick = ()=> goPage('game');
 $('navLeaderboard').onclick = ()=> goPage('leaderboard');
+$('navClans').onclick = ()=> goPage('clans');
 $('navProfile').onclick = ()=> goPage('profile');
 $('navChat').onclick = ()=> goPage('chat');
 $('navAdmin').onclick = ()=> goPage('admin');
@@ -2111,7 +2143,7 @@ async function registerWin(guesses, modeKey){
 function refreshGameUI(){
   const u = CURRENT_USER; if(!u) return;
   renderAvatar($('gameAvatar'), u);
-  $('gameUname').innerHTML = '@' + escapeHtml(u.username) + verifiedBadgeHtml(u) + clanTagHtml(u);
+  $('gameUname').innerHTML = usernameWithTik(u);
   $('gameLevel').textContent = u.level;
   $('gameLevelTitle').innerHTML = levelTitleHtml(u.level);
   $('gameXpText').textContent = `${u.level_xp}/${u.level_xp_needed}`;
@@ -2125,59 +2157,79 @@ function refreshGameUI(){
 /* ---------- LEADERBOARD ---------- */
 $('tabGlobal').onclick = ()=>{ lbMode='global'; setLbTabs(); loadLeaderboard(); };
 $('tabWeekly').onclick = ()=>{ lbMode='weekly'; setLbTabs(); loadLeaderboard(); };
-$('tabClans').onclick = ()=>{ lbMode='clans'; setLbTabs(); loadLeaderboard(); };
 function setLbTabs(){
   $('tabGlobal').classList.toggle('active', lbMode==='global');
   $('tabWeekly').classList.toggle('active', lbMode==='weekly');
-  if($('tabClans')) $('tabClans').classList.toggle('active', lbMode==='clans');
-  if($('tabStreak')) $('tabStreak').classList.toggle('active', lbMode==='streak');
   const sp = $('lbSearch');
-  if(sp) sp.placeholder = lbMode==='clans' ? 'Search clan name or tag...' : 'Search username...';
+  if(sp) sp.placeholder = 'Search username...';
 }
 let lbSearchTimer = null;
 $('lbSearch').oninput = ()=>{ clearTimeout(lbSearchTimer); lbSearchTimer = setTimeout(()=> loadLeaderboard(), 280); };
+
+
+async function loadClansPage(){
+  const list = $('clansPageList');
+  if(!list) return;
+  list.innerHTML = inlineLoadingHtml('Loading clans');
+  await loadMyClan(false);
+  const search = ($('clansPageSearch') && $('clansPageSearch').value || '').trim();
+  let query = sb.from('clans').select('*').order('level',{ascending:false}).order('xp',{ascending:false}).limit(150);
+  if(search) query = query.or(`name.ilike.%${search}%,tag.ilike.%${search}%`);
+  const { data: clans, error } = await query;
+  list.innerHTML = '';
+  if(error){
+    list.innerHTML = `<div class="empty-note">${escapeHtml(error.message||'Error loading clans')}</div>`;
+    return;
+  }
+  if(!clans || !clans.length){
+    list.innerHTML = '<div class="empty-note">No clans yet — create one</div>';
+  }
+
+  // My clan card
+  const card = $('myClanCard');
+  const manageBtn = $('clanManageBtn');
+  const createBtn = $('clanCreateBtn');
+  if(MY_CLAN && MY_CLAN.clan){
+    const mc = MY_CLAN.clan;
+    // refresh from list if present
+    const live = (clans||[]).find(c=>c.id===mc.id) || mc;
+    const rank = (clans||[]).findIndex(c=>c.id===mc.id);
+    if(card){
+      card.classList.remove('hidden');
+      card.innerHTML = `Your clan · <b style="color:${escapeHtml(live.color||'#1d9bf0')}">(${escapeHtml((live.tag||'').toUpperCase())})</b> <b>${escapeHtml(live.name)}</b><br>
+        Rank <b>#${rank>=0?rank+1:'—'}</b> · Lv <b>${live.level||1}</b> · <b>${(live.xp||0).toLocaleString()}</b> XP · ${live.member_count||0}/${live.max_members||12} · ${live.glory||0} 🏅`;
+      card.onclick = ()=> openClanPublicDetail(live);
+    }
+    if(manageBtn){ manageBtn.style.display = ''; }
+    if(createBtn){ createBtn.style.display = 'none'; }
+  } else {
+    if(card) card.classList.add('hidden');
+    if(manageBtn) manageBtn.style.display = 'none';
+    if(createBtn) createBtn.style.display = '';
+  }
+
+  (clans||[]).forEach((c, idx)=>{
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+    const rankClass = idx===0?'top1':idx===1?'top2':idx===2?'top3':'';
+    const col = escapeHtml(c.color||'#1d9bf0');
+    row.innerHTML = `
+      <div class="lb-rank ${rankClass}">${idx+1}</div>
+      <div class="lb-name">
+        <div class="u"><span style="color:${col};font-weight:800;">(${escapeHtml((c.tag||'').toUpperCase())})</span> ${escapeHtml(c.name)}</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Lv ${c.level||1} · ${(c.xp||0).toLocaleString()} XP · ${c.member_count||0}/${c.max_members||12} members · ${c.glory||0} 🏅</div>
+      </div>
+      <div class="lb-stats"><b>${c.level||1}</b><br><span style="font-size:10px;color:var(--text-dim)">level</span></div>`;
+    row.onclick = ()=> openClanPublicDetail(c);
+    list.appendChild(row);
+  });
+}
+let clansSearchTimer = null;
 
 async function loadLeaderboard(){
   const list = $('lbList');
   list.innerHTML = inlineLoadingHtml('Loading leaderboard');
   const search = $('lbSearch').value.trim();
-
-  // ---- CLANS TAB ----
-  if(lbMode === 'clans'){
-    let query = sb.from('clans').select('*').order('level',{ascending:false}).order('xp',{ascending:false}).limit(100);
-    if(search) query = query.or(`name.ilike.%${search}%,tag.ilike.%${search}%`);
-    const { data: clans, error } = await query;
-    list.innerHTML = '';
-    if(error || !clans || !clans.length){
-      list.innerHTML = '<div class="empty-note">No clans yet — create one from Profile</div>';
-      if($('myRankCard')) $('myRankCard').classList.add('hidden');
-      return;
-    }
-    // my clan rank card
-    const card = $('myRankCard');
-    if(card && MY_CLAN && MY_CLAN.clan){
-      const mc = MY_CLAN.clan;
-      const rank = clans.findIndex(c=>c.id===mc.id);
-      card.classList.remove('hidden');
-      card.innerHTML = `Your clan: <b><span class="clan-tag" style="background:${escapeHtml(mc.color)}">${escapeHtml(mc.tag)}</span> ${escapeHtml(mc.name)}</b> · #${rank>=0?rank+1:'—'} · Lv ${mc.level||1} · ${mc.xp||0} XP · ${mc.weekly_points||0} week pts · ${mc.glory||0} 🏅`;
-    } else if(card) card.classList.add('hidden');
-
-    clans.forEach((c, idx)=>{
-      const row = document.createElement('div');
-      row.className = 'lb-row';
-      const rankClass = idx===0?'top1':idx===1?'top2':idx===2?'top3':'';
-      row.innerHTML = `
-        <div class="lb-rank ${rankClass}">${idx+1}</div>
-        <div class="lb-name">
-          <div class="u"><span class="clan-tag" style="background:${escapeHtml(c.color||'#1d9bf0')}">${escapeHtml(c.tag)}</span> ${escapeHtml(c.name)}</div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Lv ${c.level||1} · ${c.member_count||0}/${c.max_members||12} · ${c.is_open?'Open':'Invite'} · ${c.glory||0} 🏅 Glory</div>
-        </div>
-        <div class="lb-stats"><b>${(c.xp||0).toLocaleString()}</b> XP<br>${c.weekly_points||0} week</div>`;
-      row.onclick = ()=> openClanPublicDetail(c);
-      list.appendChild(row);
-    });
-    return;
-  }
 
   let query;
   if(lbMode === 'global'){
@@ -2250,7 +2302,7 @@ async function openUserModal(u){
   modalTargetUser = u;
   try{ await fetchClanForUsers([u.id]); attachClanToUser(u); }catch(e){}
   renderAvatar($('modalAvatar'), u);
-  $('modalUname').innerHTML = '@' + escapeHtml(u.username) + verifiedBadgeHtml(u) + clanTagHtml(u);
+  $('modalUname').innerHTML = usernameWithTik(u);
   // Role badge: only Owner / Staff — never on normal users
   (function(){
     const badge = $('modalAdminBadge');
@@ -2564,7 +2616,7 @@ function refreshProfileUI(){
   $('profLevelTitle').innerHTML = levelTitleHtml(u.level);
   const pu = $('profUname');
   if(pu){
-    pu.innerHTML = '@' + escapeHtml(u.username) + ' ' + verifiedBadgeHtml(u) + clanTagHtml(u) + (truthyFlag(u.is_owner) ? ' <span class="owner-badge">✦ Boss</span>' : (truthyFlag(u.is_admin) ? ' <span class="admin-badge">Staff</span>' : ''));
+    pu.innerHTML = usernameWithTik(u) + (truthyFlag(u.is_owner) ? ' <span class="owner-badge">✦ Boss</span>' : (truthyFlag(u.is_admin) ? ' <span class="admin-badge">Staff</span>' : ''));
   }
   // achievements
   const grid = $('achGrid');
@@ -3548,7 +3600,11 @@ function attachClanToUser(u){
 
 async function refreshClanProfileUI(){
   const box = $('clanProfileBox');
-  if(!box) return;
+  if(!box){
+    // profile section removed — keep MY_CLAN in sync for Clans tab
+    try{ await loadMyClan(false); }catch(e){}
+    return;
+  }
   if(!CURRENT_USER){ box.innerHTML = '<div class="empty-note">Log in first</div>'; return; }
   box.innerHTML = inlineLoadingHtml('Loading clan');
   await loadMyClan(true);
@@ -3673,9 +3729,10 @@ async function submitClanCreate(){
     }
     toast('Clan created!');
     await loadMyClan(true);
-    refreshClanProfileUI();
-    refreshGameUI(); refreshProfileUI();
+    try{ refreshGameUI(); }catch(e){}
     closeClanCreate();
+    if($('pageClans') && !$('pageClans').classList.contains('hidden')) loadClansPage();
+    else goPage('clans');
   }catch(e){ toast(e.message||'Error'); }
   finally{ $('clanCreateSubmit').disabled = false; }
 }
@@ -3965,6 +4022,10 @@ setTimeout(()=>{
   if($('clanCreateBtn')) $('clanCreateBtn').onclick = ()=> openClanCreate(false);
   if($('clanBrowseBtn')) $('clanBrowseBtn').onclick = ()=> openClanBrowse();
   if($('clanManageBtn')) $('clanManageBtn').onclick = ()=> openClanManage();
+  if($('clansPageSearch') && !$('clansPageSearch')._bound){
+    $('clansPageSearch')._bound = true;
+    $('clansPageSearch').oninput = ()=>{ clearTimeout(clansSearchTimer); clansSearchTimer = setTimeout(()=> loadClansPage(), 280); };
+  }
   if($('closeClanCreate')) $('closeClanCreate').onclick = closeClanCreate;
   if($('closeClanBrowse')) $('closeClanBrowse').onclick = closeClanBrowse;
   if($('closeClanManage')) $('closeClanManage').onclick = closeClanManage;
@@ -4230,9 +4291,9 @@ async function openClanPublicDetail(clan){
   const umap = {}; users.forEach(u=>umap[u.id]=u);
   let html = `
     <div class="clan-detail-hero">
-      <span class="clan-tag" style="background:${escapeHtml(c.color)};font-size:15px;padding:6px 14px;">${escapeHtml(c.tag)}</span>
+      <span class="clan-tag-badge" style="background:${escapeHtml(c.color)};">${escapeHtml((c.tag||'').toUpperCase())}</span>
       <div style="font-weight:800;font-size:18px;margin-top:10px;">${escapeHtml(c.name)}</div>
-      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">${c.is_open?'Open join':'Invite / request'} · ${c.member_count||0}/${c.max_members||12} members</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">${c.is_open?'Open join':'Invite / request'} · ${c.member_count||0}/${c.max_members||12} members${c.created_at?' · Created '+fmtDate(c.created_at):''}</div>
       <div class="clan-stat-row">
         <span class="clan-stat-pill">Level <b>${c.level||1}</b></span>
         <span class="clan-stat-pill"><b>${c.level_xp||0}</b>/${c.level_xp_needed||100} XP</span>
@@ -4291,7 +4352,7 @@ async function openClanPublicDetail(clan){
     await writeAudit('clan_disband', { details: { clan_id: c.id, name: c.name } });
     toast('Clan disbanded');
     closeClanManage();
-    if(lbMode==='clans') loadLeaderboard();
+    if($('pageClans') && !$('pageClans').classList.contains('hidden')) loadClansPage();
   };
 }
 
@@ -4303,25 +4364,76 @@ const _origJoinOrRequest = typeof joinOrRequestClan === 'function' ? joinOrReque
 
 function ensureNotifRealtime(){
   if(!sb || !CURRENT_USER) return;
+  const uid = CURRENT_USER.id;
   try{
-    sb.channel('notifications-realtime-'+CURRENT_USER.id)
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'notifications', filter:'user_id=eq.'+CURRENT_USER.id }, payload=>{
-        refreshNotifBadge();
-        if(document.visibilityState === 'visible'){
-          const n = payload.new;
-          if(n) toast('🔔 ' + (n.title||'Notification'));
+    sb.channel('notifications-realtime-'+uid)
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'notifications', filter:'user_id=eq.'+uid }, payload=>{
+        try{ refreshNotifBadge(); }catch(e){}
+        const n = payload.new;
+        if(n && document.visibilityState === 'visible'){
+          toast('🔔 ' + (n.title || 'Notification'));
+        }
+        // if panel open, refresh list
+        const panel = $('notifPanel');
+        if(panel && !panel.classList.contains('hidden')){
+          try{ loadNotifications(); }catch(e){}
+        }
+      })
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'notifications', filter:'user_id=eq.'+uid }, ()=>{
+        try{ refreshNotifBadge(); }catch(e){}
+      })
+      .subscribe();
+  }catch(e){}
+
+  // Live: kicked from clan / joined / role change
+  try{
+    sb.channel('clan-member-live-'+uid)
+      .on('postgres_changes', { event:'DELETE', schema:'public', table:'clan_members', filter:'user_id=eq.'+uid }, async ()=>{
+        MY_CLAN = null;
+        if(CURRENT_USER){ CURRENT_USER.clan_tag=null; CURRENT_USER.clan_color=null; CURRENT_USER.clan_id=null; }
+        delete CLAN_CACHE[uid];
+        toast('You were removed from the clan');
+        try{ refreshGameUI(); }catch(e){}
+        if($('pageClans') && !$('pageClans').classList.contains('hidden')) loadClansPage();
+        if($('pageProfile') && !$('pageProfile').classList.contains('hidden')) refreshProfileUI();
+      })
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'clan_members', filter:'user_id=eq.'+uid }, async ()=>{
+        await loadMyClan(true);
+        toast('You joined a clan');
+        try{ refreshGameUI(); }catch(e){}
+        if($('pageClans') && !$('pageClans').classList.contains('hidden')) loadClansPage();
+      })
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'clan_members', filter:'user_id=eq.'+uid }, async ()=>{
+        await loadMyClan(true);
+        try{ refreshGameUI(); }catch(e){}
+      })
+      .subscribe();
+  }catch(e){}
+
+  // Live clan stats (xp/level) for list when on clans page
+  try{
+    sb.channel('clans-live-global')
+      .on('postgres_changes', { event:'*', schema:'public', table:'clans' }, ()=>{
+        if($('pageClans') && !$('pageClans').classList.contains('hidden')){
+          clearTimeout(window.__clansLiveT);
+          window.__clansLiveT = setTimeout(()=> loadClansPage(), 400);
         }
       })
       .subscribe();
   }catch(e){}
-  // clan member kicks live
+
+  // Leader: live join requests → notification already covers badge; also refresh manage if open
   try{
-    sb.channel('clan-member-live-'+CURRENT_USER.id)
-      .on('postgres_changes', { event:'DELETE', schema:'public', table:'clan_members', filter:'user_id=eq.'+CURRENT_USER.id }, async ()=>{
-        MY_CLAN = null;
-        if(CURRENT_USER){ CURRENT_USER.clan_tag=null; CURRENT_USER.clan_color=null; }
-        toast('You were removed from the clan');
-        try{ refreshClanProfileUI(); refreshGameUI(); }catch(e){}
+    sb.channel('clan-requests-live')
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'clan_join_requests' }, async payload=>{
+        const row = payload.new;
+        if(!row || !MY_CLAN || !MY_CLAN.clan) return;
+        if(row.clan_id !== MY_CLAN.clan.id) return;
+        if(MY_CLAN.role !== 'leader' && MY_CLAN.role !== 'officer') return;
+        try{ refreshNotifBadge(); }catch(e){}
+        if($('clanManageModal') && !$('clanManageModal').classList.contains('hidden')){
+          try{ renderClanManage(); }catch(e){}
+        }
       })
       .subscribe();
   }catch(e){}
