@@ -777,6 +777,34 @@ html[data-theme="light"] #modalAchievements{
 html[data-theme="light"] .detail-row{border-bottom-color:var(--border);}
 html[data-theme="light"] #userModal .section-title{color:var(--text) !important;border-color:var(--border) !important;}
 
+
+/* App-style line icons (Instagram-like) */
+.ic-svg, .nav-ic, .top-ic{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;flex-shrink:0;
+}
+.ic-svg svg, .nav-ic svg, .top-ic svg{
+  width:100%;height:100%;stroke:currentColor;fill:none;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
+.nav-ic{width:26px;height:26px;margin-bottom:3px;}
+nav.tabbar button .ic-label{font-size:10px;font-weight:600;letter-spacing:.2px;margin-top:1px;}
+nav.tabbar button.active{color:var(--text);}
+nav.tabbar button.active .nav-ic svg{stroke-width:2.2;}
+.top-ic{width:20px;height:20px;}
+.theme-toggle-btn .top-ic, .notif-btn .top-ic{pointer-events:none;}
+.notif-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;}
+
+
+nav.tabbar button{position:relative;}
+nav.tabbar .tab-badge{
+  position:absolute;top:4px;right:50%;margin-right:-22px;
+  min-width:16px;height:16px;padding:0 4px;font-size:10px;
+  border-radius:999px;background:var(--red);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:800;
+}
+nav.tabbar .tab-badge.hide{display:none;}
+
 </style>
 </head>
 <body>
@@ -823,9 +851,14 @@ html[data-theme="light"] #userModal .section-title{color:var(--text) !important;
     <header class="topbar">
       <div class="brand"><span class="dot"></span> Guessino</div>
       <div style="display:flex;align-items:center;gap:6px;">
-        <button type="button" id="themeToggleBtn" class="theme-toggle-btn" title="Toggle theme">🌙</button>
+        <button type="button" id="themeToggleBtn" class="theme-toggle-btn" title="Toggle theme" aria-label="Toggle theme">
+          <span class="top-ic" id="themeToggleIcon"><svg viewBox="0 0 24 24"><path d="M21 14.5A8.5 8.5 0 1110 3a7 7 0 0011 11.5z"/></svg></span>
+        </button>
         <div style="position:relative;">
-          <button type="button" id="notifToggleBtn" class="notif-btn" title="Notifications" aria-label="Notifications">🔔<span class="notif-badge hide" id="notifBadge">0</span></button>
+          <button type="button" id="notifToggleBtn" class="notif-btn" title="Notifications" aria-label="Notifications">
+            <span class="top-ic"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>
+            <span class="notif-badge hide" id="notifBadge">0</span>
+          </button>
           <div id="notifPanel" class="notif-panel hidden"></div>
         </div>
         <div style="position:relative;">
@@ -991,12 +1024,31 @@ html[data-theme="light"] #userModal .section-title{color:var(--text) !important;
     </main>
 
     <nav class="tabbar">
-      <button id="navGame" class="active"><span class="ic">🎮</span>Game</button>
-      <button id="navLeaderboard"><span class="ic">👑</span>Leaderboard</button>
-      <button id="navClans"><span class="ic">🛡️</span>Clans</button>
-      <button id="navChat"><span class="ic">💬</span>Chat<span class="tab-badge hide" id="chatTabBadge">0</span></button>
-      <button id="navProfile"><span class="ic">⚙️</span>Profile</button>
-      <button id="navAdmin" class="hidden"><span class="ic">🌐</span>Admin</button>
+      <button id="navGame" class="active">
+        <span class="nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h2M7 10v4M15 11h.01M18 13h.01"/></svg></span>
+        <span class="ic-label">Game</span>
+      </button>
+      <button id="navLeaderboard">
+        <span class="nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 01-10 0V4z"/><path d="M17 8h2a2 2 0 012 2c0 2.5-2 4-5 4M7 8H5a2 2 0 00-2 2c0 2.5 2 4 5 4"/></svg></span>
+        <span class="ic-label">Ranks</span>
+      </button>
+      <button id="navClans">
+        <span class="nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></span>
+        <span class="ic-label">Clans</span>
+      </button>
+      <button id="navChat">
+        <span class="nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z"/></svg></span>
+        <span class="ic-label">Chat</span>
+        <span class="tab-badge hide" id="chatTabBadge">0</span>
+      </button>
+      <button id="navProfile">
+        <span class="nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0116 0"/></svg></span>
+        <span class="ic-label">Profile</span>
+      </button>
+      <button id="navAdmin" class="hidden">
+        <span class="nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></span>
+        <span class="ic-label">Admin</span>
+      </button>
     </nav>
   </div>
 </div>
@@ -3715,9 +3767,12 @@ function applyTheme(theme){
   const t = theme === 'light' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', t);
   try{ localStorage.setItem('gz_theme', t); }catch(e){}
-  const icon = t === 'light' ? '☀️' : '🌙';
-  const b1 = $('themeToggleBtn'); if(b1) b1.textContent = icon;
-  const b2 = $('themeToggleBtn2'); if(b2) b2.textContent = (t==='light'?'Switch to dark theme':'Switch to light theme') + ' ' + icon;
+    const moon = '<span class="top-ic"><svg viewBox="0 0 24 24"><path d="M21 14.5A8.5 8.5 0 1110 3a7 7 0 0011 11.5z"/></svg></span>';
+  const sun = '<span class="top-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></span>';
+  const b1 = $('themeToggleBtn');
+  if(b1) b1.innerHTML = (t === 'light' ? moon : sun);
+  const b2 = $('themeToggleBtn2');
+  if(b2) b2.textContent = (t==='light'?'Switch to dark theme':'Switch to light theme');
 }
 function toggleTheme(){
   const cur = document.documentElement.getAttribute('data-theme') || 'dark';
