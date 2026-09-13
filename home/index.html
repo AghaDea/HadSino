@@ -2,14 +2,14 @@
 <html lang="en" dir="ltr">
 <head>
 <script>
-/* Auth gate: no session → leave home before app UI/logic */
+/* Auth gate: no session → login.html before app */
 (function(){
   try{
     if(!localStorage.getItem('gz_user_id')){
-      location.replace('../login/');
+      location.replace('login/');
     }
   }catch(e){
-    location.replace('../login/');
+    location.replace('login/');
   }
 })();
 </script>
@@ -1794,10 +1794,10 @@ async function boot(){
       localStorage.removeItem('gz_user_id');
     }
     // Not logged in → Login page
-    location.replace('../login/');
+    location.replace('login/');
   }catch(e){
     console.error(e);
-    location.replace('../login/');
+    location.replace('login/');
   }
 }
 
@@ -1910,7 +1910,7 @@ $('authSubmitBtn').onclick = async ()=>{
     $('authSubmitBtn').disabled = false;
   }
 };
-$('banLogoutBtn').onclick = ()=>{ localStorage.removeItem('gz_user_id'); location.replace('../login/'); };
+$('banLogoutBtn').onclick = ()=>{ localStorage.removeItem('gz_user_id'); location.replace('login/'); };
 
 /* ---------- SESSION ---------- */
 async function enterSession(user, opts){
@@ -2039,7 +2039,7 @@ async function checkDeviceRevoked(userId){
       localStorage.removeItem('gz_user_id');
       CURRENT_USER = null;
       toast('This device was removed from the account');
-      location.replace('../login/');
+      location.replace('login/');
       return true;
     }
   }catch(e){}
@@ -2977,7 +2977,7 @@ $('savePasswordBtn').onclick = async ()=>{
 $('logoutBtn').onclick = ()=>{
   localStorage.removeItem('gz_user_id');
   CURRENT_USER = null;
-  location.replace('../login/');
+  location.replace('login/');
 };
 
 /* ---------- CHAT ---------- */
@@ -3086,7 +3086,7 @@ async function syncCurrentUserFromServer(){
         localStorage.removeItem('gz_user_id');
         CURRENT_USER = null;
         toast('You were logged out from this device');
-        location.replace('../login/');
+        location.replace('login/');
       }
     }
   }catch(e){}
@@ -3120,7 +3120,7 @@ function ensureUserRealtime(){
         localStorage.removeItem('gz_user_id');
         CURRENT_USER = null;
         toast('You were logged out from this device');
-        location.replace('../login/');
+        location.replace('login/');
       }
     })
     .subscribe((status)=>{
