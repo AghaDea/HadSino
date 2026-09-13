@@ -2,17 +2,30 @@
 <html lang="en" dir="ltr">
 <head>
 <script>
-/* Auth gate: no session → login.html before app */
+/* Auth gate + base path (GitHub Pages safe) */
+function gzBaseDir(){
+  var path = location.pathname || '/';
+  if (/\/index\.html$/i.test(path)) path = path.replace(/\/index\.html$/i, '/');
+  else if (!path.endsWith('/')) {
+    if (/\.[a-zA-Z0-9]+$/.test(path.split('/').pop())) path = path.replace(/\/[^/]*$/, '/');
+    else path = path + '/';
+  }
+  return path;
+}
+function gzGoLogin(){
+  try {
+    location.replace(gzBaseDir() + 'login/');
+  } catch (e) {
+    gzGoLogin();
+  }
+}
 (function(){
   try{
-    if(!localStorage.getItem('gz_user_id')){
-      location.replace('login/');
-    }
-  }catch(e){
-    location.replace('login/');
-  }
+    if(!localStorage.getItem('gz_user_id')) gzGoLogin();
+  }catch(e){ gzGoLogin(); }
 })();
 </script>
+
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -1283,11 +1296,26 @@ nav.tabbar .tab-badge.hide{display:none;}
 
 
 <script>
+
+function gzBaseDir(){
+  var path = location.pathname || '/';
+  if (/\/index\.html$/i.test(path)) path = path.replace(/\/index\.html$/i, '/');
+  else if (!path.endsWith('/')) {
+    if (/\.[a-zA-Z0-9]+$/.test(path.split('/').pop())) path = path.replace(/\/[^/]*$/, '/');
+    else path = path + '/';
+  }
+  return path;
+}
+function gzGoLogin(){
+  try { location.replace(gzBaseDir() + 'login/'); }
+  catch (e) { location.replace('login/'); }
+}
+
 /* =====================================================================
    CONFIG — paste your Supabase project values
    ===================================================================== */
-const SUPABASE_URL = "https://qgdyocpjsarcaqpkjtft.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_YBNy37JACMiuRa8xRylNeQ_OgxU_L-U";
+const SUPABASE_URL = "http";
+const SUPABASE_ANON_KEY = "";
 
 let sb = null;
 try{
@@ -1794,10 +1822,10 @@ async function boot(){
       localStorage.removeItem('gz_user_id');
     }
     // Not logged in → Login page
-    location.replace('login/');
+    gzGoLogin();
   }catch(e){
     console.error(e);
-    location.replace('login/');
+    gzGoLogin();
   }
 }
 
@@ -1910,7 +1938,7 @@ $('authSubmitBtn').onclick = async ()=>{
     $('authSubmitBtn').disabled = false;
   }
 };
-$('banLogoutBtn').onclick = ()=>{ localStorage.removeItem('gz_user_id'); location.replace('login/'); };
+$('banLogoutBtn').onclick = ()=>{ localStorage.removeItem('gz_user_id'); gzGoLogin(); };
 
 /* ---------- SESSION ---------- */
 async function enterSession(user, opts){
@@ -2039,7 +2067,7 @@ async function checkDeviceRevoked(userId){
       localStorage.removeItem('gz_user_id');
       CURRENT_USER = null;
       toast('This device was removed from the account');
-      location.replace('login/');
+      gzGoLogin();
       return true;
     }
   }catch(e){}
@@ -2977,7 +3005,7 @@ $('savePasswordBtn').onclick = async ()=>{
 $('logoutBtn').onclick = ()=>{
   localStorage.removeItem('gz_user_id');
   CURRENT_USER = null;
-  location.replace('login/');
+  gzGoLogin();
 };
 
 /* ---------- CHAT ---------- */
@@ -3086,7 +3114,7 @@ async function syncCurrentUserFromServer(){
         localStorage.removeItem('gz_user_id');
         CURRENT_USER = null;
         toast('You were logged out from this device');
-        location.replace('login/');
+        gzGoLogin();
       }
     }
   }catch(e){}
@@ -3120,7 +3148,7 @@ function ensureUserRealtime(){
         localStorage.removeItem('gz_user_id');
         CURRENT_USER = null;
         toast('You were logged out from this device');
-        location.replace('login/');
+        gzGoLogin();
       }
     })
     .subscribe((status)=>{
