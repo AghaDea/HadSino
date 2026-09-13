@@ -3,13 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="0; url=login/">
 <title>Guessino</title>
-<script>location.replace('login/');</script>
+<script>
+(function () {
+  try {
+    var id = localStorage.getItem('gz_user_id');
+    if (id) {
+      location.replace('home/');
+    } else {
+      location.replace('login/');
+    }
+  } catch (e) {
+    location.replace('login/');
+  }
+})();
+</script>
 </head>
 <body>
 <p style="font-family:system-ui;text-align:center;margin-top:40vh;color:#888;">
-  <a href="login/">Go to Login</a>
+  <a href="login/">Login</a> · <a href="home/">Home</a>
 </p>
 </body>
 </html>
