@@ -1133,6 +1133,12 @@ html[data-theme="light"] .reply-bar{background:#fff;}
 
 
 <script>
+if (!sessionStorage.getItem("reloaded")) {
+    sessionStorage.setItem("reloaded", "1");
+    setTimeout(() => location.reload(), 1000);
+} else {
+    sessionStorage.removeItem("reloaded");
+}
 /* =====================================================================
    CONFIG — paste your Supabase project values
    ===================================================================== */
