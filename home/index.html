@@ -1,6 +1,19 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
+<script>
+/* Auth gate: no session → leave home before app UI/logic */
+(function(){
+  try{
+    if(!localStorage.getItem('gz_user_id')){
+      location.replace('../login/');
+    }
+  }catch(e){
+    location.replace('../login/');
+  }
+})();
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Guessino | Number Guess</title>
