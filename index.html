@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guessino</title>
+<script>
+
+function gzBaseDir(){
+  // Directory of the current page, always with trailing slash.
+  // Fixes GitHub Pages when URL is /REPO (no trailing slash) vs /REPO/
+  var path = location.pathname || '/';
+  if (/\/index\.html$/i.test(path)) path = path.replace(/\/index\.html$/i, '/');
+  else if (!path.endsWith('/')) {
+    // /REPO or /REPO/home → drop last segment only if it looks like a file; else treat as folder
+    if (/\.[a-zA-Z0-9]+$/.test(path.split('/').pop())) {
+      path = path.replace(/\/[^/]*$/, '/');
+    } else {
+      path = path + '/';
+    }
+  }
+  return path;
+}
+function gzGo(rel){
+  // rel like 'home/' or 'login/' or '../' — resolve against current dir safely
+  try {
+    var u = new URL(rel, location.origin + gzBaseDir());
+    location.replace(u.pathname + (u.search||'') + (u.hash||''));
+  } catch (e) {
+    location.replace(rel);
+  }
+}
+
+(function () {
+  try {
+    var base = gzBaseDir(); // e.g. /REPO/
+    if (localStorage.getItem('gz_user_id')) {
+      location.replace(base + 'home/');
+    } else {
+      location.replace(base + 'home/login/');
+    }
+  } catch (e) {
+    try {
+      location.href = 'home/login/';
+    } catch (e2) {}
+  }
+})();
+</script>
+</head>
+<body>
+<noscript><p><a href="home/login/">Login</a></p></noscript>
+</body>
+</html>
