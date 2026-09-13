@@ -476,10 +476,7 @@ nav.tabbar button.active .ic{color:var(--text);}
   max-height:280px;overflow-y:auto;-webkit-overflow-scrolling:touch;
   border-top:1px solid var(--border);margin-bottom:20px;
 }
-#modalAchievements{
-  max-height:160px;overflow-y:auto;margin-top:10px;
-  border:1px solid var(--border);border-radius:12px;padding:8px;background:#000;
-}
+#modalAchievements{max-height:160px;overflow-y:auto;margin-top:10px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--bg);}
 
 
 /* Level title colors */
@@ -755,6 +752,31 @@ html:not([data-theme="light"]) .clan-members-scroll{background:#0a0c0f;}
 html:not([data-theme="light"]) .stat-grid .box,
 html:not([data-theme="light"]) .admin-stat{background:#0a0c0f;border-color:#2a2f36;}
 
+
+html[data-theme="light"] #modalAchievements,
+html[data-theme="light"] #modalAchievementsWrap,
+html[data-theme="light"] #modalDevices,
+html[data-theme="light"] #modalDevicesWrap{
+  background:transparent !important;
+  color:var(--text);
+}
+html[data-theme="light"] .ach-item,
+html[data-theme="light"] #modalAchievements .ach-item{
+  background:#f4f6f8 !important;
+  border-color:var(--border) !important;
+  color:var(--text) !important;
+}
+html[data-theme="light"] .ach-item .ach-name{color:var(--text) !important;}
+html[data-theme="light"] .ach-item .ach-desc{color:var(--text-dim) !important;}
+html[data-theme="light"] #modalAchievements{
+  background:#f7f9fb !important;
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:8px;
+}
+html[data-theme="light"] .detail-row{border-bottom-color:var(--border);}
+html[data-theme="light"] #userModal .section-title{color:var(--text) !important;border-color:var(--border) !important;}
+
 </style>
 </head>
 <body>
@@ -1006,6 +1028,10 @@ html:not([data-theme="light"]) .admin-stat{background:#0a0c0f;border-color:#2a2f
     <div id="modalDevicesWrap" class="hidden" style="margin-top:12px;">
       <div class="section-title" style="margin-top:0;border:none;padding:0 0 6px;font-size:14px;">Devices</div>
       <div id="modalDevices" style="font-size:11px;color:var(--text-dim);max-height:120px;overflow-y:auto;"></div>
+    </div>
+    <div id="modalClanActions" class="hidden" style="margin-top:14px;">
+      <button type="button" class="btn btn-primary" id="modalClanInviteBtn" style="margin:0;width:100%;">Invite to my clan</button>
+      <p style="font-size:11px;color:var(--text-dim);margin:8px 0 0;text-align:center;">Sends a notification they can Accept / Reject</p>
     </div>
     <div id="adminBanSection" class="hidden">
       <div class="ban-actions">
@@ -4285,7 +4311,7 @@ async function renderClanManage(){
   }
 
   html += `<div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">`;
-  if(canInvite) html += `<button class="btn btn-ghost" id="clanInviteBtn" style="margin:0;">Invite player</button>`;
+  /* Invite only from Leaderboard user profile modal */
   if(canEdit) html += `<button class="btn btn-ghost" id="clanEditBtn" style="margin:0;">Edit name / tag / color</button>`;
   if(isLeader){
     html += `<button class="btn btn-ghost" id="clanTransferBtn" style="margin:0;">Transfer leadership</button>`;
@@ -4504,16 +4530,23 @@ function updateNotifBadge(n){
 }
 async function refreshNotifBadge(){
   if(!CURRENT_USER || !sb){ updateNotifBadge(0); return; }
+  let n = 0;
   try{
     const { count, error } = await sb.from('notifications')
       .select('*', { count:'exact', head:true })
       .eq('user_id', CURRENT_USER.id)
       .eq('is_read', false);
-    if(error){ updateNotifBadge(0); return; }
-    updateNotifBadge(count || 0);
-  }catch(e){
-    updateNotifBadge(0);
-  }
+    if(!error) n = count || 0;
+  }catch(e){}
+  try{
+    const { count: c2 } = await sb.from('clan_invites')
+      .select('*', { count:'exact', head:true })
+      .eq('invitee_id', CURRENT_USER.id)
+      .eq('status', 'pending');
+    // at least show pending invites
+    n = Math.max(n, c2 || 0);
+  }catch(e){}
+  updateNotifBadge(n);
 }
 
 async function loadNotifications(){
@@ -4528,38 +4561,77 @@ async function loadNotifications(){
 
   if(!CURRENT_USER){
     panel.innerHTML = header() + '<div class="notif-empty">Log in to see notifications</div>';
-    bindClose();
-    return;
+    bindClose(); return;
   }
   if(!sb){
     panel.innerHTML = header() + '<div class="notif-empty">Database not connected</div>';
-    bindClose();
-    return;
+    bindClose(); return;
   }
 
   panel.innerHTML = header() + inlineLoadingHtml('Loading');
   bindClose();
 
   try{
-    const { data, error } = await sb.from('notifications')
-      .select('*')
-      .eq('user_id', CURRENT_USER.id)
-      .order('created_at', { ascending:false })
-      .limit(40);
+    // 1) DB notifications
+    let rows = [];
+    let notifError = null;
+    try{
+      const res = await sb.from('notifications').select('*').eq('user_id', CURRENT_USER.id)
+        .order('created_at', { ascending:false }).limit(40);
+      notifError = res.error;
+      rows = res.data || [];
+    }catch(e){ notifError = e; }
 
-    if(error){
-      console.warn('notifications error', error);
-      const msg = (error.message || '').toLowerCase();
-      const missing = msg.includes('does not exist') || msg.includes('schema cache') || error.code === '42P01' || error.code === 'PGRST205';
+    // 2) Pending clan invites for me (always merge — source of truth)
+    let pendingInvites = [];
+    try{
+      const { data: invs } = await sb.from('clan_invites').select('*')
+        .eq('invitee_id', CURRENT_USER.id).eq('status','pending')
+        .order('created_at',{ascending:false}).limit(20);
+      pendingInvites = invs || [];
+    }catch(e){}
+
+    // Build synthetic notif rows for invites missing from notifications list
+    const existingInviteIds = new Set();
+    rows.forEach(n=>{
+      if(n.type==='clan_invite' && n.data && n.data.invite_id) existingInviteIds.add(n.data.invite_id);
+    });
+    for(const inv of pendingInvites){
+      if(existingInviteIds.has(inv.id)) continue;
+      let clanName = 'a clan', clanTag = '';
+      try{
+        const { data: c } = await sb.from('clans').select('name,tag,color').eq('id', inv.clan_id).maybeSingle();
+        if(c){ clanName = c.name; clanTag = c.tag; }
+      }catch(e){}
+      let fromName = 'Someone';
+      try{
+        const { data: u } = await sb.from('users').select('username').eq('id', inv.inviter_id).maybeSingle();
+        if(u) fromName = u.username;
+      }catch(e){}
+      rows.unshift({
+        id: 'invite-'+inv.id,
+        user_id: CURRENT_USER.id,
+        type: 'clan_invite',
+        title: 'Clan invite',
+        body: '@'+fromName+' invited you to '+clanName+(clanTag?(' ['+clanTag+']'):''),
+        data: { invite_id: inv.id, clan_id: inv.clan_id, from_user_id: inv.inviter_id, status:'pending' },
+        is_read: false,
+        created_at: inv.created_at,
+        _synthetic: true
+      });
+    }
+
+    if(notifError && !rows.length && !pendingInvites.length){
+      const msg = (notifError.message||'').toLowerCase();
+      const missing = msg.includes('does not exist') || msg.includes('schema cache') || notifError.code==='42P01' || notifError.code==='PGRST205';
       panel.innerHTML = header() + `<div class="notif-empty">${missing
-        ? 'Notifications table missing.<br>Run the latest supabase_schema.sql in Supabase.'
-        : ('Error: ' + escapeHtml(error.message || 'Unable to load'))}</div>`;
+        ? 'Run latest supabase_schema.sql (notifications table).'
+        : ('Error: '+escapeHtml(notifError.message||'Unable to load'))}</div>`;
       bindClose();
-      updateNotifBadge(0);
+      updateNotifBadge(pendingInvites.length);
       return;
     }
 
-    const rows = data || [];
     if(!rows.length){
       panel.innerHTML = header() + '<div class="notif-empty">No notifications yet</div>';
       bindClose();
@@ -4567,24 +4639,23 @@ async function loadNotifications(){
       return;
     }
 
-    const unread = rows.filter(n => !n.is_read).length;
-    updateNotifBadge(unread);
+    const unread = rows.filter(n => !n.is_read).length + pendingInvites.filter(inv => !existingInviteIds.has(inv.id)).length;
+    // unique unread estimate
+    updateNotifBadge(Math.max(unread, pendingInvites.length));
 
-    // live status for pending actions
-    const inviteIds = [];
-    const reqIds = [];
-    rows.forEach(n=>{
-      const d = n.data || {};
-      if(!n.is_read && n.type==='clan_invite' && d.invite_id) inviteIds.push(d.invite_id);
-      if(!n.is_read && n.type==='clan_request' && d.request_id) reqIds.push(d.request_id);
-    });
     const inviteStatus = {};
-    const reqStatus = {};
+    pendingInvites.forEach(i => { inviteStatus[i.id] = i.status; });
+    const inviteIds = rows.filter(n => n.type==='clan_invite' && n.data && n.data.invite_id).map(n=>n.data.invite_id);
     try{
       if(inviteIds.length){
         const { data: invs } = await sb.from('clan_invites').select('id,status').in('id', inviteIds);
         (invs||[]).forEach(i => { inviteStatus[i.id] = i.status; });
       }
+    }catch(e){}
+
+    const reqIds = rows.filter(n => !n.is_read && n.type==='clan_request' && n.data && n.data.request_id).map(n=>n.data.request_id);
+    const reqStatus = {};
+    try{
       if(reqIds.length){
         const { data: reqs } = await sb.from('clan_join_requests').select('id,status').in('id', reqIds);
         (reqs||[]).forEach(r => { reqStatus[r.id] = r.status; });
@@ -4597,12 +4668,12 @@ async function loadNotifications(){
       let resolvedLabel = '';
       if(n.type === 'clan_invite' && d.invite_id){
         const st = inviteStatus[d.invite_id] || (n.is_read ? 'done' : 'pending');
-        if(st === 'pending' && !n.is_read){
+        if(st === 'pending'){
           actions = `<div class="n-actions">
-            <button type="button" style="background:var(--green)" data-nact="accept_invite" data-nid="${n.id}" data-iid="${d.invite_id}" data-cid="${d.clan_id||''}">Accept</button>
-            <button type="button" style="background:var(--red)" data-nact="reject_invite" data-nid="${n.id}" data-iid="${d.invite_id}">Reject</button>
+            <button type="button" style="background:var(--green)" data-nact="accept_invite" data-nid="${n._synthetic?'':n.id}" data-iid="${d.invite_id}" data-cid="${d.clan_id||''}">Accept</button>
+            <button type="button" style="background:var(--red)" data-nact="reject_invite" data-nid="${n._synthetic?'':n.id}" data-iid="${d.invite_id}">Reject</button>
           </div>`;
-        } else if(st !== 'pending'){
+        } else {
           resolvedLabel = `<div class="n-body" style="margin-top:4px;">Status: ${escapeHtml(String(st))}</div>`;
         }
       }
@@ -4635,8 +4706,8 @@ async function loadNotifications(){
         const row = btn.closest('.notif-item');
         if(row) row.querySelectorAll('button').forEach(b => { b.disabled = true; });
         try{
-          if(act==='accept_invite') await handleAcceptInvite(btn.dataset.iid, btn.dataset.cid, btn.dataset.nid);
-          if(act==='reject_invite') await handleRejectInvite(btn.dataset.iid, btn.dataset.nid);
+          if(act==='accept_invite') await handleAcceptInvite(btn.dataset.iid, btn.dataset.cid, btn.dataset.nid||null);
+          if(act==='reject_invite') await handleRejectInvite(btn.dataset.iid, btn.dataset.nid||null);
           if(act==='accept_req') await handleAcceptReq(btn.dataset.rid, btn.dataset.uid, btn.dataset.cid, btn.dataset.nid);
           if(act==='reject_req') await handleRejectReq(btn.dataset.rid, btn.dataset.nid);
         }catch(err){ toast((err && err.message) || 'Failed'); }
