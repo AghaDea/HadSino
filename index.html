@@ -696,6 +696,65 @@ html[data-theme="light"] .reply-bar{background:#fff;}
 }
 .clan-req-row{padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;}
 
+
+/* ==== Theme polish v3 ==== */
+html[data-theme="light"] .modal-box,
+html[data-theme="light"] .modal-bg .modal-box{
+  background:#ffffff !important;
+  color:var(--text);
+  border-color:var(--border);
+}
+html[data-theme="light"] .detail-row{border-color:var(--border);color:var(--text);}
+html[data-theme="light"] .detail-row span:first-child{color:var(--text-dim);}
+html[data-theme="light"] .modal-close{background:#f0f2f5;color:var(--text);}
+html[data-theme="light"] #userModal .modal-box,
+html[data-theme="light"] #clanManageModal .modal-box,
+html[data-theme="light"] #clanCreateModal .modal-box,
+html[data-theme="light"] #clanBrowseModal .modal-box{
+  background:#fff !important;
+}
+html[data-theme="light"] .ban-actions button,
+html[data-theme="light"] .btn-ban-device,
+html[data-theme="light"] .btn-ban-normal{color:#fff;}
+html[data-theme="light"] .clan-members-scroll,
+html[data-theme="light"] .clan-stat-pill{background:#f4f6f8;border-color:var(--border);}
+html[data-theme="light"] .lb-tabs{border-color:var(--border);}
+html[data-theme="light"] .search-wrap{border-color:var(--border);}
+html[data-theme="light"] #pageChat .lb-row{background:transparent;}
+html[data-theme="light"] .auth-wrap,
+html[data-theme="light"] .ban-wrap,
+html[data-theme="light"] .loading-wrap{background:var(--bg);}
+html[data-theme="light"] .auth-card .field input{background:#fff !important;}
+html[data-theme="light"] .mini-form input,
+html[data-theme="light"] .mini-form textarea,
+html[data-theme="light"] input[type=datetime-local]{background:#fff;color:var(--text);border-color:var(--border);}
+html[data-theme="light"] #supportMenu,
+html[data-theme="light"] .notif-panel{background:#fff !important;border-color:var(--border);}
+html[data-theme="light"] .notif-panel-header{background:#fff !important;}
+
+/* Dark theme richer */
+html:not([data-theme="light"]){
+  --bg:#000000;
+  --bg-elev:#12151a;
+  --border:#2a2f36;
+  --text:#e7e9ea;
+  --text-dim:#8b98a5;
+}
+html:not([data-theme="light"]) .modal-box{
+  background:#16181c;
+  border-color:#2f3336;
+  box-shadow:0 12px 48px rgba(0,0,0,.55);
+}
+html:not([data-theme="light"]) .card,
+html:not([data-theme="light"]) .lb-row:hover{background:rgba(255,255,255,.03);}
+html:not([data-theme="light"]) .keypad button{background:#0a0c0f;border-color:#2a2f36;}
+html:not([data-theme="light"]) .guess-display{background:#0a0c0f;}
+html:not([data-theme="light"]) .msg.theirs{background:#1c2128;border-color:#2a2f36;}
+html:not([data-theme="light"]) .notif-panel{background:#16181c;}
+html:not([data-theme="light"]) .clan-members-scroll{background:#0a0c0f;}
+html:not([data-theme="light"]) .stat-grid .box,
+html:not([data-theme="light"]) .admin-stat{background:#0a0c0f;border-color:#2a2f36;}
+
 </style>
 </head>
 <body>
@@ -1133,12 +1192,6 @@ html[data-theme="light"] .reply-bar{background:#fff;}
 
 
 <script>
-if (!sessionStorage.getItem("reloaded")) {
-    sessionStorage.setItem("reloaded", "1");
-    setTimeout(() => location.reload(), 1000);
-} else {
-    sessionStorage.removeItem("reloaded");
-}
 /* =====================================================================
    CONFIG — paste your Supabase project values
    ===================================================================== */
@@ -2454,6 +2507,34 @@ async function openUserModal(u){
   $('adminBanSection').classList.toggle('hidden', !showAdmin);
   $('banForm').classList.add('hidden');
   $('btnUnban').classList.toggle('hidden', !(canBan && u.banned));
+  // Clan invite from profile modal
+  try{
+    await loadMyClan(false);
+    const canInv = MY_CLAN && myClanPerm('invite') && u.id !== CURRENT_USER.id && !u.clan_id;
+    // if cache says no clan, still allow invite attempt
+    const showInv = MY_CLAN && myClanPerm('invite') && u.id !== CURRENT_USER.id;
+    const wrap = $('modalClanActions');
+    const invBtn = $('modalClanInviteBtn');
+    if(wrap && invBtn){
+      wrap.classList.toggle('hidden', !showInv);
+      invBtn.onclick = async ()=>{
+        if(!MY_CLAN || !myClanPerm('invite')){ toast('No invite permission'); return; }
+        const { data: already } = await sb.from('clan_members').select('id').eq('user_id', u.id).maybeSingle();
+        if(already){ toast('User already in a clan'); return; }
+        const { data: pend } = await sb.from('clan_invites').select('id').eq('clan_id', MY_CLAN.clan.id).eq('invitee_id', u.id).eq('status','pending').maybeSingle();
+        if(pend){ toast('Invite already pending'); return; }
+        const { data: inv, error } = await sb.from('clan_invites').insert({
+          clan_id: MY_CLAN.clan.id, inviter_id: CURRENT_USER.id, invitee_id: u.id, status:'pending'
+        }).select().single();
+        if(error){ toast(error.message||'Invite failed'); return; }
+        const ok = await pushNotification(u.id, 'clan_invite', 'Clan invite',
+          '@'+CURRENT_USER.username+' invited you to '+MY_CLAN.clan.name+' ['+MY_CLAN.clan.tag+']',
+          { invite_id: inv.id, clan_id: MY_CLAN.clan.id, from_user_id: CURRENT_USER.id, status:'pending' });
+        await logClanHistory(MY_CLAN.clan.id, 'invite', { target_user_id: u.id, target_username: u.username });
+        toast(ok ? 'Invite sent' : 'Invite saved (notification may be delayed)');
+      };
+    }
+  }catch(e){ console.warn(e); }
   // Hide individual buttons by permission
   if($('btnBanDevice')) $('btnBanDevice').style.display = canBan ? '' : 'none';
   if($('btnBanNormal')) $('btnBanNormal').style.display = canBan ? '' : 'none';
@@ -4351,11 +4432,11 @@ async function renderClanManage(){
       clan_id: clan.id, inviter_id: CURRENT_USER.id, invitee_id: targetU.id, status:'pending'
     }).select().single();
     if(error){ toast(error.message||'Failed'); return; }
-    await pushNotification(targetU.id, 'clan_invite', 'Clan invite',
+    const ok = await pushNotification(targetU.id, 'clan_invite', 'Clan invite',
       '@'+CURRENT_USER.username+' invited you to '+clan.name+' ['+clan.tag+']',
       { invite_id: inv.id, clan_id: clan.id, from_user_id: CURRENT_USER.id, status:'pending' });
     await logClanHistory(clan.id, 'invite', { target_user_id: targetU.id, target_username: targetU.username });
-    toast('Invite sent to @'+targetU.username);
+    toast(ok ? ('Invite sent to @'+targetU.username) : 'Invite created — notification may need a moment');
   };
 }
 
@@ -4383,12 +4464,30 @@ const _origRefreshGameUI = typeof refreshGameUI === 'function' ? refreshGameUI :
 /* ---------- NOTIFICATIONS ---------- */
 let notifLoaded = false;
 async function pushNotification(userId, type, title, body, data){
-  if(!sb || !userId) return;
+  if(!sb || !userId) return false;
   try{
-    await sb.from('notifications').insert({
-      user_id: userId, type, title, body: body||'', data: data||{}
-    });
-  }catch(e){ console.warn('notif', e); }
+    const row = {
+      user_id: userId,
+      type: type || 'system',
+      title: title || 'Notification',
+      body: body || '',
+      data: data || {},
+      is_read: false
+    };
+    const { error } = await sb.from('notifications').insert(row);
+    if(error){
+      console.warn('notif insert', error);
+      // retry without data if jsonb issue
+      try{
+        const { error: e2 } = await sb.from('notifications').insert({
+          user_id: userId, type: row.type, title: row.title, body: row.body, is_read: false
+        });
+        if(e2){ console.warn('notif retry', e2); return false; }
+        return true;
+      }catch(e3){ return false; }
+    }
+    return true;
+  }catch(e){ console.warn('notif', e); return false; }
 }
 
 function updateNotifBadge(n){
@@ -4810,79 +4909,119 @@ async function openClanPublicDetail(clan){
 function ensureNotifRealtime(){
   if(!sb || !CURRENT_USER) return;
   const uid = CURRENT_USER.id;
-  try{
-    sb.channel('notifications-realtime-'+uid)
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'notifications', filter:'user_id=eq.'+uid }, payload=>{
-        try{ refreshNotifBadge(); }catch(e){}
-        const n = payload.new;
-        if(n && document.visibilityState === 'visible'){
-          toast('🔔 ' + (n.title || 'Notification'));
-        }
-        // if panel open, refresh list
-        const panel = $('notifPanel');
-        if(panel && !panel.classList.contains('hidden')){
-          try{ loadNotifications(); }catch(e){}
-        }
-      })
-      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'notifications', filter:'user_id=eq.'+uid }, ()=>{
-        try{ refreshNotifBadge(); }catch(e){}
-      })
-      .subscribe();
-  }catch(e){}
 
-  // Live: kicked from clan / joined / role change
+  // Avoid duplicate channels
   try{
-    sb.channel('clan-member-live-'+uid)
-      .on('postgres_changes', { event:'DELETE', schema:'public', table:'clan_members', filter:'user_id=eq.'+uid }, async ()=>{
-        MY_CLAN = null;
-        if(CURRENT_USER){ CURRENT_USER.clan_tag=null; CURRENT_USER.clan_color=null; CURRENT_USER.clan_id=null; }
-        delete CLAN_CACHE[uid];
-        toast('You were removed from the clan');
-        try{ refreshGameUI(); }catch(e){}
-        if($('pageClans') && !$('pageClans').classList.contains('hidden')) loadClansPage();
-        if($('pageProfile') && !$('pageProfile').classList.contains('hidden')) refreshProfileUI();
-      })
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'clan_members', filter:'user_id=eq.'+uid }, async ()=>{
-        await loadMyClan(true);
-        toast('You joined a clan');
-        try{ refreshGameUI(); }catch(e){}
-        if($('pageClans') && !$('pageClans').classList.contains('hidden')) loadClansPage();
-      })
-      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'clan_members', filter:'user_id=eq.'+uid }, async ()=>{
-        await loadMyClan(true);
-        try{ refreshGameUI(); }catch(e){}
-      })
-      .subscribe();
+    if(window.__gzChannels){
+      window.__gzChannels.forEach(ch=>{ try{ sb.removeChannel(ch); }catch(e){} });
+    }
   }catch(e){}
+  window.__gzChannels = [];
 
-  // Live clan stats (xp/level) for list when on clans page
-  try{
-    sb.channel('clans-live-global')
-      .on('postgres_changes', { event:'*', schema:'public', table:'clans' }, ()=>{
-        if($('pageClans') && !$('pageClans').classList.contains('hidden')){
-          clearTimeout(window.__clansLiveT);
-          window.__clansLiveT = setTimeout(()=> loadClansPage(), 400);
-        }
-      })
-      .subscribe();
-  }catch(e){}
+  const sub = (name, builder)=>{
+    try{
+      const ch = builder(sb.channel(name));
+      ch.subscribe((status)=>{ /* ignore */ });
+      window.__gzChannels.push(ch);
+    }catch(e){ console.warn('rt', name, e); }
+  };
 
-  // Leader: live join requests → notification already covers badge; also refresh manage if open
-  try{
-    sb.channel('clan-requests-live')
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'clan_join_requests' }, async payload=>{
-        const row = payload.new;
-        if(!row || !MY_CLAN || !MY_CLAN.clan) return;
-        if(row.clan_id !== MY_CLAN.clan.id) return;
-        if(MY_CLAN.role !== 'leader' && MY_CLAN.role !== 'officer') return;
-        try{ refreshNotifBadge(); }catch(e){}
-        if($('clanManageModal') && !$('clanManageModal').classList.contains('hidden')){
-          try{ renderClanManage(); }catch(e){}
+  sub('notifications-live-'+uid, ch => ch
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'notifications', filter:'user_id=eq.'+uid }, payload=>{
+      try{ refreshNotifBadge(); }catch(e){}
+      const n = payload.new;
+      if(n && document.visibilityState === 'visible') toast('🔔 ' + (n.title || 'Notification'));
+      const panel = $('notifPanel');
+      if(panel && !panel.classList.contains('hidden')) try{ loadNotifications(); }catch(e){}
+    })
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'notifications', filter:'user_id=eq.'+uid }, ()=>{
+      try{ refreshNotifBadge(); }catch(e){}
+    })
+  );
+
+  sub('clan-member-live-'+uid, ch => ch
+    .on('postgres_changes', { event:'DELETE', schema:'public', table:'clan_members', filter:'user_id=eq.'+uid }, async ()=>{
+      MY_CLAN = null;
+      if(CURRENT_USER){ CURRENT_USER.clan_tag=null; CURRENT_USER.clan_color=null; CURRENT_USER.clan_id=null; }
+      delete CLAN_CACHE[uid];
+      toast('You were removed from the clan');
+      try{ refreshGameUI(); }catch(e){}
+      if($('pageClans') && !$('pageClans').classList.contains('hidden')) loadClansPage();
+      if($('pageProfile') && !$('pageProfile').classList.contains('hidden')) try{ refreshProfileUI(); }catch(e){}
+      if($('clanManageModal') && !$('clanManageModal').classList.contains('hidden')) closeClanManage();
+    })
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'clan_members', filter:'user_id=eq.'+uid }, async ()=>{
+      await loadMyClan(true);
+      toast('You joined a clan');
+      try{ refreshGameUI(); }catch(e){}
+      if($('pageClans') && !$('pageClans').classList.contains('hidden')) loadClansPage();
+    })
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'clan_members', filter:'user_id=eq.'+uid }, async (payload)=>{
+      const prev = MY_CLAN && MY_CLAN.rank;
+      await loadMyClan(true);
+      const next = MY_CLAN && MY_CLAN.rank;
+      if(prev != null && next != null && prev !== next){
+        toast('Your clan rank is now R'+next+' · '+(MY_CLAN.clan ? rankTitle(MY_CLAN.clan, next) : ''));
+      }
+      try{ refreshGameUI(); }catch(e){}
+      if($('clanManageModal') && !$('clanManageModal').classList.contains('hidden')) try{ renderClanManage(); }catch(e){}
+    })
+  );
+
+  sub('clan-invites-live-'+uid, ch => ch
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'clan_invites', filter:'invitee_id=eq.'+uid }, async (payload)=>{
+      // fallback if notification insert failed
+      try{ refreshNotifBadge(); }catch(e){}
+      toast('🛡️ Clan invite received');
+      const panel = $('notifPanel');
+      if(panel && !panel.classList.contains('hidden')) try{ loadNotifications(); }catch(e){}
+      // ensure a notification exists
+      try{
+        const inv = payload.new;
+        if(inv && inv.id){
+          const { count } = await sb.from('notifications').select('*',{count:'exact',head:true})
+            .eq('user_id', uid).eq('type','clan_invite').eq('is_read', false);
+          if((count||0) === 0){
+            await pushNotification(uid, 'clan_invite', 'Clan invite', 'You received a clan invite', {
+              invite_id: inv.id, clan_id: inv.clan_id, from_user_id: inv.inviter_id, status:'pending'
+            });
+            try{ refreshNotifBadge(); }catch(e){}
+          }
         }
-      })
-      .subscribe();
-  }catch(e){}
+      }catch(e){}
+    })
+  );
+
+  sub('clans-live-global', ch => ch
+    .on('postgres_changes', { event:'*', schema:'public', table:'clans' }, ()=>{
+      if($('pageClans') && !$('pageClans').classList.contains('hidden')){
+        clearTimeout(window.__clansLiveT);
+        window.__clansLiveT = setTimeout(()=> loadClansPage(), 350);
+      }
+    })
+  );
+
+  sub('clan-requests-live', ch => ch
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'clan_join_requests' }, async payload=>{
+      const row = payload.new;
+      if(!row || !MY_CLAN || !MY_CLAN.clan) return;
+      if(row.clan_id !== MY_CLAN.clan.id) return;
+      if(!myClanPerm('accept_requests')) return;
+      try{ refreshNotifBadge(); }catch(e){}
+      toast('🛡️ New join request');
+      if($('clanManageModal') && !$('clanManageModal').classList.contains('hidden')) try{ renderClanManage(); }catch(e){}
+    })
+  );
+
+  // Polling fallback every 12s for badge (if realtime not enabled on project)
+  if(window.__notifPoll) clearInterval(window.__notifPoll);
+  window.__notifPoll = setInterval(()=>{
+    if(!CURRENT_USER) return;
+    if(document.visibilityState !== 'visible') return;
+    try{ refreshNotifBadge(); }catch(e){}
+  }, 12000);
 }
+
 
 function bindNotifUI(){
 
