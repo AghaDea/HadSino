@@ -815,8 +815,8 @@ body{min-height:100vh;}
 </div>
 
 <script>
-const SUPABASE_URL = "https://qgdyocpjsarcaqpkjtft.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_YBNy37JACMiuRa8xRylNeQ_OgxU_L-U";
+const SUPABASE_URL = "http";
+const SUPABASE_ANON_KEY = "";
 let sb = null;
 try {
   if (SUPABASE_URL && !SUPABASE_URL.includes("YOUR-PROJECT") && SUPABASE_URL.length > 8 && SUPABASE_ANON_KEY) {
@@ -982,7 +982,20 @@ function showUserBanScreen(user){
   $('banReasonText').textContent = user.ban_reason || 'No reason';
   $('banUntilText').textContent = user.ban_until ? fmtDate(user.ban_until) : 'Permanent';
 }
-function goHome(){ location.replace('../'); }
+function goHome(){
+  try {
+    var path = location.pathname || '/';
+    if (/\/index\.html$/i.test(path)) path = path.replace(/\/index\.html$/i, '/');
+    else if (!path.endsWith('/')) path = path + '/';
+    // /REPO/home/login/ → /REPO/home/
+    var parts = path.replace(/\/+$/,'').split('/');
+    parts.pop(); // remove login
+    var homePath = parts.join('/') + '/';
+    location.replace(homePath);
+  } catch (e) {
+    location.replace('../');
+  }
+}
 
 async function registerCurrentDevice(userId){
   if(!sb || !userId || !DEVICE_ID) return;
