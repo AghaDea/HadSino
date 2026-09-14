@@ -55,7 +55,6 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 button{font-family:inherit;cursor:pointer;}
-button:disabled{opacity:.5;cursor:default;pointer-events:none;}
 input,textarea{font-family:inherit;}
 ::-webkit-scrollbar{width:5px;}
 ::-webkit-scrollbar-thumb{background:#333;border-radius:10px;}
@@ -2637,52 +2636,32 @@ async function openUserModal(u){
   $('adminBanSection').classList.toggle('hidden', !showAdmin);
   $('banForm').classList.add('hidden');
   $('btnUnban').classList.toggle('hidden', !(canBan && u.banned));
-  // Clan invite from profile modal — only offer when it can actually succeed
+  // Clan invite from profile modal
   try{
     await loadMyClan(false);
+    const canInv = MY_CLAN && myClanPerm('invite') && u.id !== CURRENT_USER.id && !u.clan_id;
+    // if cache says no clan, still allow invite attempt
+    const showInv = MY_CLAN && myClanPerm('invite') && u.id !== CURRENT_USER.id;
     const wrap = $('modalClanActions');
     const invBtn = $('modalClanInviteBtn');
-    const canInv = !!(MY_CLAN && myClanPerm('invite') && u.id !== CURRENT_USER.id && !u.clan_id);
     if(wrap && invBtn){
-      wrap.classList.toggle('hidden', !canInv);
-      if(canInv){
-        invBtn.disabled = false;
-        invBtn.textContent = 'Invite to my clan';
-        // Reflect an already-pending invite immediately, instead of only failing after a click
-        try{
-          const { data: pend } = await sb.from('clan_invites').select('id')
-            .eq('clan_id', MY_CLAN.clan.id).eq('invitee_id', u.id).eq('status','pending').maybeSingle();
-          if(pend){ invBtn.disabled = true; invBtn.textContent = 'Invite pending'; }
-        }catch(e){}
-        invBtn.onclick = async ()=>{
-          if(invBtn.disabled) return;
-          if(!MY_CLAN || !myClanPerm('invite')){ toast('No invite permission'); return; }
-          invBtn.disabled = true;
-          const prevLabel = invBtn.textContent;
-          invBtn.textContent = 'Sending…';
-          try{
-            const { data: already } = await sb.from('clan_members').select('id').eq('user_id', u.id).maybeSingle();
-            if(already){ toast('User already in a clan'); invBtn.textContent = 'Already in a clan'; return; }
-            const { data: pend } = await sb.from('clan_invites').select('id').eq('clan_id', MY_CLAN.clan.id).eq('invitee_id', u.id).eq('status','pending').maybeSingle();
-            if(pend){ toast('Invite already pending'); invBtn.textContent = 'Invite pending'; return; }
-            const { data: inv, error } = await sb.from('clan_invites').insert({
-              clan_id: MY_CLAN.clan.id, inviter_id: CURRENT_USER.id, invitee_id: u.id, status:'pending'
-            }).select().single();
-            if(error){ toast(error.message||'Invite failed'); invBtn.disabled = false; invBtn.textContent = prevLabel; return; }
-            const ok = await pushNotification(u.id, 'clan_invite', 'Clan invite',
-              '@'+CURRENT_USER.username+' invited you to '+MY_CLAN.clan.name+' ['+MY_CLAN.clan.tag+']',
-              { invite_id: inv.id, clan_id: MY_CLAN.clan.id, from_user_id: CURRENT_USER.id, status:'pending' });
-            await logClanHistory(MY_CLAN.clan.id, 'invite', { target_user_id: u.id, target_username: u.username });
-            toast(ok ? 'Invite sent' : 'Invite saved (notification may be delayed)');
-            invBtn.textContent = 'Invite sent';
-          }catch(e){
-            console.warn(e);
-            toast('Invite failed');
-            invBtn.disabled = false;
-            invBtn.textContent = prevLabel;
-          }
-        };
-      }
+      wrap.classList.toggle('hidden', !showInv);
+      invBtn.onclick = async ()=>{
+        if(!MY_CLAN || !myClanPerm('invite')){ toast('No invite permission'); return; }
+        const { data: already } = await sb.from('clan_members').select('id').eq('user_id', u.id).maybeSingle();
+        if(already){ toast('User already in a clan'); return; }
+        const { data: pend } = await sb.from('clan_invites').select('id').eq('clan_id', MY_CLAN.clan.id).eq('invitee_id', u.id).eq('status','pending').maybeSingle();
+        if(pend){ toast('Invite already pending'); return; }
+        const { data: inv, error } = await sb.from('clan_invites').insert({
+          clan_id: MY_CLAN.clan.id, inviter_id: CURRENT_USER.id, invitee_id: u.id, status:'pending'
+        }).select().single();
+        if(error){ toast(error.message||'Invite failed'); return; }
+        const ok = await pushNotification(u.id, 'clan_invite', 'Clan invite',
+          '@'+CURRENT_USER.username+' invited you to '+MY_CLAN.clan.name+' ['+MY_CLAN.clan.tag+']',
+          { invite_id: inv.id, clan_id: MY_CLAN.clan.id, from_user_id: CURRENT_USER.id, status:'pending' });
+        await logClanHistory(MY_CLAN.clan.id, 'invite', { target_user_id: u.id, target_username: u.username });
+        toast(ok ? 'Invite sent' : 'Invite saved (notification may be delayed)');
+      };
     }
   }catch(e){ console.warn(e); }
   // Hide individual buttons by permission
@@ -2807,10 +2786,6 @@ $('confirmBanBtn').onclick = async ()=>{
   const untilVal = $('banUntilInput').value;
   const until = untilVal ? new Date(untilVal).toISOString() : null;
   if(!(await askConfirm('Confirm ban', `Ban @${u.username} (${pendingBanType})?`))) return;
-  const confirmBtn = $('confirmBanBtn');
-  if(confirmBtn.disabled) return;
-  confirmBtn.disabled = true;
-  try{
 
   if(pendingBanType === 'device'){
     // Ban ALL known device fingerprints for this user
@@ -2860,18 +2835,12 @@ $('confirmBanBtn').onclick = async ()=>{
   $('banForm').classList.add('hidden');
   $('banReasonInput').value=''; $('banUntilInput').value='';
   loadLeaderboard();
-  }catch(e){ console.warn(e); toast('Ban failed'); }
-  finally{ confirmBtn.disabled = false; }
 };
 
 $('btnUnban').onclick = async ()=>{
   const u = modalTargetUser;
   if(!canModerateUser(u) || !hasPerm('ban')){ toast('No permission to ban'); return; }
   if(!(await askConfirm('Remove ban', `Unban @${u.username}?`))) return;
-  const unbanBtn = $('btnUnban');
-  if(unbanBtn.disabled) return;
-  unbanBtn.disabled = true;
-  try{
   await sb.from('users').update({
     banned:false, ban_type:null, ban_reason:null, ban_until:null, banned_at:null
   }).eq('id', u.id);
@@ -2894,8 +2863,6 @@ $('btnUnban').onclick = async ()=>{
   toast('Ban removed');
   $('userModal').classList.add('hidden');
   loadLeaderboard();
-  }catch(e){ console.warn(e); toast('Unban failed'); }
-  finally{ unbanBtn.disabled = false; }
 };
 
 $('btnToggleTik').onclick = async ()=>{
@@ -2904,17 +2871,11 @@ $('btnToggleTik').onclick = async ()=>{
   if(!canModerateUser(u) || !hasPerm('verify')){ toast('No permission to verify'); return; }
   const next = !u.tik;
   if(!(await askConfirm(next?'Verify user':'Remove verification', `${next?'Give':'Remove'} verified badge for @${u.username}?`))) return;
-  const tikBtn = $('btnToggleTik');
-  if(tikBtn.disabled) return;
-  tikBtn.disabled = true;
-  try{
-    await sb.from('users').update({ tik: next }).eq('id', u.id);
-    u.tik = next;
-    await writeAudit(next ? 'verify' : 'unverify', { target_user_id: u.id, target_username: u.username });
-    toast(next ? 'Verified' : 'Verification removed');
-    await openUserModal(u);
-  }catch(e){ console.warn(e); toast('Action failed'); }
-  finally{ tikBtn.disabled = false; }
+  await sb.from('users').update({ tik: next }).eq('id', u.id);
+  u.tik = next;
+  await writeAudit(next ? 'verify' : 'unverify', { target_user_id: u.id, target_username: u.username });
+  toast(next ? 'Verified' : 'Verification removed');
+  openUserModal(u);
 };
 
 $('btnToggleAdmin').onclick = async ()=>{
@@ -2923,10 +2884,6 @@ $('btnToggleAdmin').onclick = async ()=>{
   if(!u || u.id === CURRENT_USER.id || u.is_owner){ toast('Not allowed'); return; }
   const next = !u.is_admin;
   if(!(await askConfirm(next?'Make Staff':'Revoke Staff', (next?'Grant staff role to @':'Remove staff role from @')+u.username+'?'))) return;
-  const adminBtn = $('btnToggleAdmin');
-  if(adminBtn.disabled) return;
-  adminBtn.disabled = true;
-  try{
   const defaultPerms = next ? {
     support: true, reports: true, ban: false, verify: false,
     chats: false, announce: false, weekly_reset: false, audit: true, manage_staff: false
@@ -2940,9 +2897,7 @@ $('btnToggleAdmin').onclick = async ()=>{
   u.permissions = defaultPerms;
   await writeAudit(next ? 'make_admin' : 'revoke_admin', { target_user_id: u.id, target_username: u.username, details: defaultPerms });
   toast(next ? 'Staff granted — set permissions below' : 'Staff revoked');
-  await openUserModal(u);
-  }catch(e){ console.warn(e); toast('Action failed'); }
-  finally{ adminBtn.disabled = false; }
+  openUserModal(u);
 };
 
 /* ---------- PROFILE ---------- */
