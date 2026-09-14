@@ -823,7 +823,7 @@ body{min-height:100vh;}
 
 <script>
 const SUPABASE_URL = "https://qgdyocpjsarcaqpkjtft.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_btTA7hycxcdl2NDQTdSoUw_4Wia5FoN";
+const SUPABASE_ANON_KEY = "sb_publishable_YBNy37JACMiuRa8xRylNeQ_OgxU_L-U";
 let sb = null;
 try {
   if (SUPABASE_URL && !SUPABASE_URL.includes("YOUR-PROJECT") && SUPABASE_URL.length > 8 && SUPABASE_ANON_KEY) {
@@ -947,6 +947,24 @@ function validatePassword(p){
   return null;
 }
 
+function authErrorMessage(error, fallback){
+  if(!error) return fallback || 'Something went wrong. Please try again.';
+  const code=String(error.code||'');
+  const msg=String(error.message||'').toLowerCase();
+  if(code==='23505' || msg.includes('duplicate') || msg.includes('unique')) return 'This username is already taken.';
+  if(code==='42501' || msg.includes('row-level security') || msg.includes('permission denied')) return 'Database permission denied. Please check the Supabase policies.';
+  if(msg.includes('failed to fetch') || msg.includes('network') || msg.includes('fetch')) return 'Connection failed. Check your internet connection and try again.';
+  if(msg.includes('timeout')) return 'Server took too long to respond. Please try again.';
+  return error.message || fallback || 'Something went wrong. Please try again.';
+}
+
+async function withTimeout(promise, ms){
+  let timer;
+  try{
+    return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('timeout')),ms)})]);
+  }finally{clearTimeout(timer);}
+}
+
 
 
 async function getActiveDeviceBan(){
@@ -1031,7 +1049,7 @@ async function finishLogin(user){
 
 
 /* ---------- Compact drag puzzle CAPTCHA ---------- */
-let PUZZLE={x:0,targetX:0,targetY:0,size:42,drag:false,offX:0,solved:false,started:0,moved:0};
+let PUZZLE={x:0,y:0,targetX:0,targetY:0,size:42,drag:false,offX:0,offY:0,solved:false,started:0,moved:0};
 function puzzleRand(a,b){return Math.floor(Math.random()*(b-a+1))+a}function puzzleStatus(t,c=''){const e=$('puzzleStatus');if(e){e.textContent=t||'';e.className='puzzle-status'+(c?' '+c:'')}}
 function puzzleMakeImage(){const b=$('puzzleBoard'),c=$('puzzleCanvas'),p=$('puzzlePiece'),t=$('puzzleTarget');if(!b||!c||!p||!t)return;const w=Math.max(220,b.clientWidth),h=118,s=42;c.width=w*2;c.height=h*2;const x=c.getContext('2d');x.setTransform(2,0,0,2,0,0);const palettes=[['#172554','#0f766e','#7c3aed'],['#3f1d2e','#164e63','#854d0e'],['#172033','#3f6212','#7e22ce'],['#1e293b','#075985','#9f1239']];const q=palettes[Math.floor(Math.random()*palettes.length)],g=x.createLinearGradient(0,0,w,h);g.addColorStop(0,q[0]);g.addColorStop(.5,q[1]);g.addColorStop(1,q[2]);x.fillStyle=g;x.fillRect(0,0,w,h);for(let i=0;i<45;i++){x.fillStyle='rgba(255,255,255,'+(Math.random()*.07)+')';x.beginPath();x.arc(Math.random()*w,Math.random()*h,2+Math.random()*16,0,Math.PI*2);x.fill()}const minX=8,maxX=Math.max(8,w-s-8),minY=8,maxY=Math.max(8,h-s-8);PUZZLE.targetX=puzzleRand(minX,maxX);PUZZLE.targetY=puzzleRand(minY,maxY);let px=puzzleRand(minX,maxX),py=puzzleRand(minY,maxY);for(let i=0;i<10&&Math.hypot(px-PUZZLE.targetX,py-PUZZLE.targetY)<70;i++){px=puzzleRand(minX,maxX);py=puzzleRand(minY,maxY)}PUZZLE.x=px;PUZZLE.y=py;PUZZLE.solved=false;PUZZLE.drag=false;PUZZLE.started=0;PUZZLE.moved=0;t.style.left=PUZZLE.targetX+'px';t.style.top=PUZZLE.targetY+'px';const o=document.createElement('canvas');o.width=s;o.height=s;o.getContext('2d').drawImage(c,PUZZLE.targetX*2,PUZZLE.targetY*2,s*2,s*2,0,0,s,s);p.style.width=s+'px';p.style.height=s+'px';p.style.backgroundImage='url('+o.toDataURL('image/png')+')';p.style.top=py+'px';puzzleSetX(px);puzzleStatus('')}
 function puzzleSetPos(x,y){const b=$('puzzleBoard'),p=$('puzzlePiece');if(!b||!p)return;const maxX=Math.max(0,b.clientWidth-PUZZLE.size),maxY=Math.max(0,b.clientHeight-PUZZLE.size);PUZZLE.x=Math.max(0,Math.min(maxX,x));PUZZLE.y=Math.max(0,Math.min(maxY,y));p.style.left=PUZZLE.x+'px';p.style.top=PUZZLE.y+'px'}
@@ -1039,7 +1057,7 @@ function puzzleSetX(v){puzzleSetPos(v,PUZZLE.y)}
 function puzzleDown(e){const p=$('puzzlePiece');if(!p||PUZZLE.solved)return;const r=p.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)return;e.preventDefault();PUZZLE.drag=true;PUZZLE.started=performance.now();PUZZLE.offX=e.clientX-r.left;PUZZLE.offY=e.clientY-r.top;PUZZLE.moved=0;p.classList.add('dragging');try{p.setPointerCapture(e.pointerId)}catch(_){} }
 function puzzleMove(e){if(!PUZZLE.drag)return;e.preventDefault();const r=$('puzzleBoard').getBoundingClientRect(),nx=e.clientX-r.left-PUZZLE.offX,ny=e.clientY-r.top-PUZZLE.offY;PUZZLE.moved+=Math.hypot(nx-PUZZLE.x,ny-PUZZLE.y);puzzleSetPos(nx,ny)}
 function puzzleUp(){if(PUZZLE.drag){PUZZLE.drag=false;const p=$('puzzlePiece');if(p)p.classList.remove('dragging')}}
-function checkPuzzleCaptcha(){if(PUZZLE.solved)return null;if(!PUZZLE.started||PUZZLE.moved<10){puzzleStatus('Drag the piece with your finger.','bad');return 'Puzzle verification required'}if(performance.now()-PUZZLE.started<180){puzzleStatus('Please move the piece naturally and try again.','bad');return 'Puzzle verification failed'}if(Math.hypot(PUZZLE.x-PUZZLE.targetX,PUZZLE.y-PUZZLE.targetY)<=8){PUZZLE.solved=true;puzzleSetPos(PUZZLE.targetX,PUZZLE.targetY);puzzleStatus('Verified ✓','ok');return null}puzzleStatus('Wrong position — try again.','bad');return 'Puzzle verification failed'}
+function checkPuzzleCaptcha(){if(PUZZLE.solved)return null;if(!PUZZLE.started||PUZZLE.moved<12){puzzleStatus('Drag the piece with your finger.','bad');return 'Please complete the puzzle verification'}if(performance.now()-PUZZLE.started<160){puzzleStatus('Please move the piece naturally.','bad');resetPuzzleCaptcha();return 'Please try the puzzle again'}const dx=PUZZLE.x-PUZZLE.targetX,dy=PUZZLE.y-PUZZLE.targetY;if(Math.hypot(dx,dy)<=10){PUZZLE.solved=true;puzzleSetPos(PUZZLE.targetX,PUZZLE.targetY);puzzleStatus('Verified ✓','ok');return null}puzzleStatus('Wrong position — try again.','bad');resetPuzzleCaptcha();return 'Puzzle verification failed — try again'}
 /* ---------- Anti-bot ---------- */
 const AUTH_OPENED_AT = Date.now();
 const MIN_FORM_MS = 2500;
@@ -1134,62 +1152,90 @@ async function submitAuth(){
   const username = ($('authUsername').value || '').trim();
   const password = $('authPassword').value || '';
   const errBox = $('authError');
+  const btn = $('authSubmitBtn');
   errBox.classList.add('hidden');
-  const uErr = validateUsername(username); if(uErr){ errBox.textContent=uErr; errBox.classList.remove('hidden'); return; }
-  const pErr = validatePassword(password); if(pErr){ errBox.textContent=pErr; errBox.classList.remove('hidden'); return; }
-  const vErr = checkPuzzleCaptcha(); if(vErr){ errBox.textContent=vErr; errBox.classList.remove('hidden'); return; }
-  if(!sb){ errBox.textContent='Database not connected — set SUPABASE_URL and KEY in index.html and home.html'; errBox.classList.remove('hidden'); return; }
 
-  $('authSubmitBtn').disabled = true;
+  const uErr = validateUsername(username);
+  if(uErr){ errBox.textContent=uErr; errBox.classList.remove('hidden'); return; }
+  const pErr = validatePassword(password);
+  if(pErr){ errBox.textContent=pErr; errBox.classList.remove('hidden'); return; }
+
+  const vErr = checkPuzzleCaptcha();
+  if(vErr){ errBox.textContent=vErr; errBox.classList.remove('hidden'); return; }
+  if(!sb){ errBox.textContent='Database is not connected. Please check your internet connection.'; errBox.classList.remove('hidden'); return; }
+
+  btn.disabled = true;
   try{
-    const botMsg = await runAntiBotGates(username, authMode === 'signup');
+    const botMsg = await withTimeout(runAntiBotGates(username, authMode === 'signup'), 6000);
     if(botMsg){
       errBox.textContent = botMsg;
       errBox.classList.remove('hidden');
-      generateVerifyCode();
+      resetPuzzleCaptcha();
       return;
     }
+
     const hash = await sha256(password);
+
     if(authMode === 'signup'){
-      const { data: exists } = await sb.from('users').select('id').ilike('username', username).maybeSingle();
-      if(exists){ errBox.textContent='Username taken'; errBox.classList.remove('hidden'); return; }
-      const { data: newUser, error } = await sb.from('users').insert({
-        username, password_hash: hash, device_id: DEVICE_ID
-      }).select().single();
-      if(error){ errBox.textContent=error.message||'Sign up failed'; errBox.classList.remove('hidden'); return; }
-      // Post-check: if device suddenly over limit, nuke account + ban
-      const counts = await countDeviceAccounts();
+      const lookup = await withTimeout(
+        sb.from('users').select('id').ilike('username', username).maybeSingle(), 8000
+      );
+      if(lookup.error) throw lookup.error;
+      if(lookup.data){
+        errBox.textContent='This username is already taken.';
+        errBox.classList.remove('hidden');
+        resetPuzzleCaptcha();
+        return;
+      }
+
+      const result = await withTimeout(sb.from('users').insert({
+        username: username,
+        password_hash: hash,
+        device_id: DEVICE_ID
+      }).select().single(), 10000);
+      if(result.error) throw result.error;
+      const newUser=result.data;
+
+      const counts = await withTimeout(countDeviceAccounts(), 6000);
       if(counts.day > MAX_ACCOUNTS_PER_DEVICE_24H || counts.total > MAX_ACCOUNTS_PER_DEVICE_TOTAL){
         await deleteUserHard(newUser.id);
         await banDeviceNow('Auto ban: bot mass signup');
-        await logAntiBot('anti_bot_delete_user', {
-          username,
-          reason: 'post_signup_limit',
-          target_user_id: newUser.id,
-          accounts_24h: counts.day,
-          accounts_total: counts.total
-        });
-        errBox.textContent = 'Registration blocked.';
+        await logAntiBot('anti_bot_delete_user', {username,reason:'post_signup_limit',target_user_id:newUser.id,accounts_24h:counts.day,accounts_total:counts.total});
+        errBox.textContent='Registration blocked on this device.';
         errBox.classList.remove('hidden');
-        generateVerifyCode();
+        resetPuzzleCaptcha();
         return;
       }
-      await logAntiBot('signup', { username, user_id: newUser.id, note: 'ok' });
+
+      await logAntiBot('signup', {username,user_id:newUser.id,note:'ok'});
       await finishLogin(newUser);
-    } else {
-      const { data: user } = await sb.from('users').select('*').ilike('username', username).maybeSingle();
-      if(!user || user.password_hash !== hash){
-        errBox.textContent='Incorrect username or password'; generateVerifyCode();
+    }else{
+      const result = await withTimeout(
+        sb.from('users').select('*').ilike('username', username).maybeSingle(), 8000
+      );
+      if(result.error) throw result.error;
+      const user=result.data;
+      if(!user){
+        errBox.textContent='Username not found.';
         errBox.classList.remove('hidden');
+        resetPuzzleCaptcha();
+        return;
+      }
+      if(user.password_hash !== hash){
+        errBox.textContent='Incorrect password.';
+        errBox.classList.remove('hidden');
+        resetPuzzleCaptcha();
         return;
       }
       await finishLogin(user);
     }
   }catch(e){
-    errBox.textContent = (e && e.message) || 'Something went wrong';
+    console.error('Authentication error:',e);
+    errBox.textContent=authErrorMessage(e,'Unable to complete the request. Please try again.');
     errBox.classList.remove('hidden');
+    resetPuzzleCaptcha();
   }finally{
-    $('authSubmitBtn').disabled = false;
+    btn.disabled=false;
   }
 }
 
@@ -1201,19 +1247,64 @@ $('banLogoutBtn').onclick = ()=>{ localStorage.removeItem('gz_user_id'); showAut
 
 async function boot(){
   showLoading();
-  const fallback=setTimeout(()=>{if($('loadingScreen')&&!$('loadingScreen').classList.contains('hidden'))showAuth('login')},5000);
+  let finished=false;
+  const forceOpen=setTimeout(()=>{
+    if(!finished){
+      finished=true;
+      showAuth('login');
+      const e=$('authError');
+      e.textContent='Connection is taking too long. You can try logging in again.';
+      e.classList.remove('hidden');
+    }
+  },4500);
+
   try{
-    if(!sb){showAuth('login');$('authError').textContent='Database not connected — check your connection.';$('authError').classList.remove('hidden');return}
-    await Promise.race([initDevice(),new Promise((_,r)=>setTimeout(()=>r(new Error('device timeout')),2500))]);
-    const devBan=await Promise.race([getActiveDeviceBan(),new Promise(r=>setTimeout(()=>r(null),2500))]);
-    if(devBan){showDeviceBanScreen(devBan);return}
+    if(!sb){
+      finished=true;
+      showAuth('login');
+      $('authError').textContent='Database is not connected. Please check your connection.';
+      $('authError').classList.remove('hidden');
+      return;
+    }
+
+    try{ await withTimeout(initDevice(),1800); }
+    catch(e){
+      console.warn('Device initialization failed:',e);
+      DEVICE_ID=getDeviceId();
+    }
+
+    try{
+      const devBan=await withTimeout(getActiveDeviceBan(),2500);
+      if(devBan){ finished=true; showDeviceBanScreen(devBan); return; }
+    }catch(e){ console.warn('Device ban check skipped:',e); }
+
     const savedId=localStorage.getItem('gz_user_id');
-    if(savedId){const result=await Promise.race([sb.from('users').select('*').eq('id',savedId).maybeSingle(),new Promise(r=>setTimeout(()=>r({data:null,error:{message:'timeout'}}),2500))]);const user=result&&result.data;if(!result.error&&user){if(user.banned){showUserBanScreen(user);return}goHome();return}localStorage.removeItem('gz_user_id')}
-    showAuth('login')
-  }catch(e){console.error(e);showAuth('login')}finally{clearTimeout(fallback)}
+    if(savedId){
+      try{
+        const result=await withTimeout(sb.from('users').select('*').eq('id',savedId).maybeSingle(),2500);
+        if(!result.error && result.data){
+          finished=true;
+          if(result.data.banned){ showUserBanScreen(result.data); return; }
+          goHome();
+          return;
+        }
+      }catch(e){ console.warn('Saved session check failed:',e); }
+      localStorage.removeItem('gz_user_id');
+    }
+
+    finished=true;
+    showAuth('login');
+  }catch(e){
+    console.error('Boot error:',e);
+    localStorage.removeItem('gz_user_id');
+    finished=true;
+    showAuth('login');
+  }finally{
+    clearTimeout(forceOpen);
+  }
 }
 
-(function bindPuzzleUI(){const p=$('puzzlePiece');if(p&&!p._bound){p._bound=true;p.addEventListener('pointerdown',puzzleDown,{passive:false});p.addEventListener('pointermove',puzzleMove,{passive:false});p.addEventListener('pointerup',puzzleUp,{passive:false});p.addEventListener('pointercancel',puzzleUp,{passive:false})}puzzleMakeImage();window.addEventListener('resize',()=>{if($('puzzleCaptcha'))puzzleMakeImage()})})();
+(function bindPuzzleUI(){const p=$('puzzlePiece');if(p&&!p._bound){p._bound=true;p.addEventListener('pointerdown',puzzleDown,{passive:false});p.addEventListener('pointermove',puzzleMove,{passive:false});p.addEventListener('pointerup',puzzleUp,{passive:false});p.addEventListener('pointercancel',puzzleUp,{passive:false})}window.addEventListener('resize',()=>{if($('puzzleCaptcha')&&!$('authScreen').classList.contains('hidden'))puzzleMakeImage()});requestAnimationFrame(()=>requestAnimationFrame(()=>{if($('puzzleCaptcha'))puzzleMakeImage()}))})();
 
 boot();
 </script>
