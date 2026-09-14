@@ -781,6 +781,38 @@ html[data-theme="light"] #userModal .section-title{color:var(--text) !important;
 
 body{min-height:100vh;}
 .auth-wrap{min-height:100vh;}
+
+/* Verify code (CAPTCHA) */
+.verify-wrap{margin:12px 0 4px;}
+.verify-wrap label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;font-weight:600;}
+.verify-row{display:flex;gap:8px;align-items:stretch;}
+.verify-code{
+  flex:0 0 auto;min-width:110px;padding:0 12px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:ui-monospace,monospace;font-size:20px;font-weight:800;
+  letter-spacing:4px;border-radius:10px;cursor:pointer;user-select:none;
+  background:linear-gradient(135deg,#1a1d24,#0d0f12);
+  border:1px solid var(--border);color:#7dd3fc;
+  text-decoration:line-through;text-decoration-color:rgba(125,211,252,.35);
+  position:relative;overflow:hidden;
+}
+.verify-code::before{
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(-12deg,transparent,transparent 6px,rgba(255,255,255,.04) 6px,rgba(255,255,255,.04) 7px);
+  pointer-events:none;
+}
+.verify-code:hover{border-color:var(--accent);}
+.verify-code .v-hint{display:none;}
+.verify-input{
+  flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  border-radius:10px;padding:10px 12px;font-size:15px;letter-spacing:2px;
+  font-family:ui-monospace,monospace;text-transform:uppercase;
+}
+html[data-theme="light"] .verify-code{
+  background:linear-gradient(135deg,#e8eef5,#f7f9fb);color:#0369a1;
+  text-decoration-color:rgba(3,105,161,.3);
+}
+
 </style>
 </head>
 <body>
@@ -797,6 +829,13 @@ body{min-height:100vh;}
       <div id="authError" class="err-msg hidden"></div>
       <div class="field"><label>Username</label><input id="authUsername" maxlength="16" placeholder="2 to 16 characters" autocomplete="username"></div>
       <div class="field"><label>Password</label><input id="authPassword" type="password" maxlength="15" placeholder="3 to 15 characters" autocomplete="current-password"></div>
+      <div class="verify-wrap">
+        <label>Verify code · click code to refresh</label>
+        <div class="verify-row">
+          <div class="verify-code" id="verifyCodeBox" title="Click to refresh" role="button" tabindex="0">----</div>
+          <input class="verify-input" id="verifyCodeInput" maxlength="6" placeholder="Code" autocomplete="off" inputmode="text" spellcheck="false">
+        </div>
+      </div>
       <button class="btn btn-primary" id="authSubmitBtn">Log In</button>
       <div class="switch-line" id="authSwitchLine">Don't have an account? <a href="#" id="authSwitchLink">Sign up</a></div>
     </div>
@@ -1022,6 +1061,34 @@ async function finishLogin(user){
   goHome();
 }
 
+
+/* ---------- Verify code ---------- */
+let VERIFY_CODE = '';
+function generateVerifyCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I,O,0,1
+  let s = '';
+  for(let i=0;i<5;i++) s += chars[Math.floor(Math.random()*chars.length)];
+  VERIFY_CODE = s;
+  const box = $('verifyCodeBox');
+  if(box){
+    box.textContent = s;
+    // random slight style variation
+    const rot = (Math.random()*8-4).toFixed(1);
+    box.style.transform = 'rotate('+rot+'deg)';
+    const hues = ['#7dd3fc','#a5b4fc','#86efac','#f9a8d4','#fcd34d'];
+    box.style.color = hues[Math.floor(Math.random()*hues.length)];
+  }
+  const inp = $('verifyCodeInput');
+  if(inp){ inp.value = ''; }
+  return s;
+}
+function checkVerifyCode(){
+  const inp = ($('verifyCodeInput') && $('verifyCodeInput').value || '').trim().toUpperCase();
+  if(!inp) return 'Enter the verify code';
+  if(inp !== VERIFY_CODE) return 'Verify code is incorrect';
+  return null;
+}
+
 async function submitAuth(){
   const username = ($('authUsername').value || '').trim();
   const password = $('authPassword').value || '';
@@ -1029,6 +1096,7 @@ async function submitAuth(){
   errBox.classList.add('hidden');
   const uErr = validateUsername(username); if(uErr){ errBox.textContent=uErr; errBox.classList.remove('hidden'); return; }
   const pErr = validatePassword(password); if(pErr){ errBox.textContent=pErr; errBox.classList.remove('hidden'); return; }
+  const vErr = checkVerifyCode(); if(vErr){ errBox.textContent=vErr; errBox.classList.remove('hidden'); generateVerifyCode(); return; }
   if(!sb){ errBox.textContent='Database not connected — set SUPABASE_URL and KEY in index.html and home.html'; errBox.classList.remove('hidden'); return; }
 
   $('authSubmitBtn').disabled = true;
@@ -1045,7 +1113,7 @@ async function submitAuth(){
     } else {
       const { data: user } = await sb.from('users').select('*').ilike('username', username).maybeSingle();
       if(!user || user.password_hash !== hash){
-        errBox.textContent='Incorrect username or password';
+        errBox.textContent='Incorrect username or password'; generateVerifyCode();
         errBox.classList.remove('hidden');
         return;
       }
@@ -1093,6 +1161,17 @@ async function boot(){
     showAuth('login');
   }
 }
+
+(function bindVerifyUI(){
+  const box = $('verifyCodeBox');
+  if(box && !box._bound){
+    box._bound = true;
+    box.addEventListener('click', ()=> generateVerifyCode());
+    box.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); generateVerifyCode(); }});
+  }
+  generateVerifyCode();
+})();
+
 boot();
 </script>
 </body>
