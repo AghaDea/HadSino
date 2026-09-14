@@ -1674,7 +1674,11 @@ async function loadAuditLog(){
     weekly_reset: 'Weekly reset',
     kick_device: 'Kicked device',
     kick_all_devices: 'Kicked all other devices',
-    announce: 'Published announcement'
+    announce: 'Published announcement',
+    anti_bot: 'Anti-bot block',
+    anti_bot_ban_device: 'Anti-bot: device banned',
+    anti_bot_delete_user: 'Anti-bot: account deleted',
+    signup: 'New signup'
   };
   box.innerHTML = data.map(r=>{
     const act = labels[r.action] || r.action;
