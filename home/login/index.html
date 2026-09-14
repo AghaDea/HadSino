@@ -813,6 +813,7 @@ html[data-theme="light"] .verify-code{
   text-decoration-color:rgba(3,105,161,.3);
 }
 
+.hp-field{position:absolute;left:-9999px;top:-9999px;height:0;width:0;opacity:0;overflow:hidden;pointer-events:none;}
 </style>
 </head>
 <body>
@@ -827,6 +828,10 @@ html[data-theme="light"] .verify-code{
       <div class="auth-logo">Guess<span>ino</span></div>
       <div class="auth-sub" id="authSub">Sign in to continue</div>
       <div id="authError" class="err-msg hidden"></div>
+      <div class="hp-field" aria-hidden="true">
+        <label>Website</label>
+        <input id="authWebsite" type="text" tabindex="-1" autocomplete="off" value="">
+      </div>
       <div class="field"><label>Username</label><input id="authUsername" maxlength="16" placeholder="2 to 16 characters" autocomplete="username"></div>
       <div class="field"><label>Password</label><input id="authPassword" type="password" maxlength="15" placeholder="3 to 15 characters" autocomplete="current-password"></div>
       <div class="verify-wrap">
@@ -1089,6 +1094,104 @@ function checkVerifyCode(){
   return null;
 }
 
+
+/* ---------- Anti-bot ---------- */
+const AUTH_OPENED_AT = Date.now();
+const MIN_FORM_MS = 2500;
+const MAX_ACCOUNTS_PER_DEVICE_24H = 2;
+const MAX_ACCOUNTS_PER_DEVICE_TOTAL = 4;
+
+async function logAntiBot(action, details){
+  if(!sb) return;
+  try{
+    await sb.from('audit_log').insert({
+      actor_id: null,
+      actor_username: 'SYSTEM',
+      action: action || 'anti_bot',
+      target_username: details && details.username || null,
+      target_device_id: DEVICE_ID || null,
+      details: Object.assign({ source: 'signup' }, details || {})
+    });
+  }catch(e){ console.warn('anti_bot log', e); }
+}
+
+async function banDeviceNow(reason){
+  if(!sb || !DEVICE_ID) return;
+  try{
+    await sb.from('banned_devices').upsert({
+      device_id: DEVICE_ID,
+      reason: reason || 'Auto ban: suspicious signup',
+      banned_until: null
+    }, { onConflict: 'device_id' });
+  }catch(e){
+    try{
+      await sb.from('banned_devices').insert({
+        device_id: DEVICE_ID,
+        reason: reason || 'Auto ban: suspicious signup'
+      });
+    }catch(e2){}
+  }
+}
+
+async function deleteUserHard(userId){
+  if(!sb || !userId) return;
+  try{
+    // best-effort cleanup
+    await sb.from('devices').delete().eq('user_id', userId);
+    await sb.from('users').delete().eq('id', userId);
+  }catch(e){ console.warn('delete user', e); }
+}
+
+async function countDeviceAccounts(){
+  if(!sb || !DEVICE_ID) return { day: 0, total: 0 };
+  try{
+    const since = new Date(Date.now() - 24*60*60*1000).toISOString();
+    const { data: all } = await sb.from('users').select('id,created_at').eq('device_id', DEVICE_ID);
+    const rows = all || [];
+    const day = rows.filter(u => u.created_at && u.created_at >= since).length;
+    return { day, total: rows.length };
+  }catch(e){
+    return { day: 0, total: 0 };
+  }
+}
+
+async function runAntiBotGates(username, isSignup){
+  // 1) honeypot
+  const hp = ($('authWebsite') && $('authWebsite').value || '').trim();
+  if(hp){
+    await banDeviceNow('Auto ban: bot honeypot');
+    await logAntiBot('anti_bot', { username, reason: 'honeypot', honeypot: hp.slice(0,40) });
+    return 'Unable to continue. Try again later.';
+  }
+  // 2) too fast (bot)
+  if(Date.now() - AUTH_OPENED_AT < MIN_FORM_MS){
+    await logAntiBot('anti_bot', { username, reason: 'form_too_fast', ms: Date.now()-AUTH_OPENED_AT });
+    return 'Please wait a moment and try again.';
+  }
+  // 3) device already banned
+  try{
+    const ban = await getActiveDeviceBan();
+    if(ban){
+      return 'This device is restricted.';
+    }
+  }catch(e){}
+
+  if(isSignup){
+    const counts = await countDeviceAccounts();
+    if(counts.day >= MAX_ACCOUNTS_PER_DEVICE_24H || counts.total >= MAX_ACCOUNTS_PER_DEVICE_TOTAL){
+      await banDeviceNow('Auto ban: mass signup from device');
+      await logAntiBot('anti_bot_ban_device', {
+        username,
+        reason: 'mass_signup',
+        accounts_24h: counts.day,
+        accounts_total: counts.total
+      });
+      return 'Registration temporarily blocked on this device.';
+    }
+  }
+  return null;
+}
+
 async function submitAuth(){
   const username = ($('authUsername').value || '').trim();
   const password = $('authPassword').value || '';
@@ -1101,6 +1204,13 @@ async function submitAuth(){
 
   $('authSubmitBtn').disabled = true;
   try{
+    const botMsg = await runAntiBotGates(username, authMode === 'signup');
+    if(botMsg){
+      errBox.textContent = botMsg;
+      errBox.classList.remove('hidden');
+      generateVerifyCode();
+      return;
+    }
     const hash = await sha256(password);
     if(authMode === 'signup'){
       const { data: exists } = await sb.from('users').select('id').ilike('username', username).maybeSingle();
@@ -1109,6 +1219,24 @@ async function submitAuth(){
         username, password_hash: hash, device_id: DEVICE_ID
       }).select().single();
       if(error){ errBox.textContent=error.message||'Sign up failed'; errBox.classList.remove('hidden'); return; }
+      // Post-check: if device suddenly over limit, nuke account + ban
+      const counts = await countDeviceAccounts();
+      if(counts.day > MAX_ACCOUNTS_PER_DEVICE_24H || counts.total > MAX_ACCOUNTS_PER_DEVICE_TOTAL){
+        await deleteUserHard(newUser.id);
+        await banDeviceNow('Auto ban: bot mass signup');
+        await logAntiBot('anti_bot_delete_user', {
+          username,
+          reason: 'post_signup_limit',
+          target_user_id: newUser.id,
+          accounts_24h: counts.day,
+          accounts_total: counts.total
+        });
+        errBox.textContent = 'Registration blocked.';
+        errBox.classList.remove('hidden');
+        generateVerifyCode();
+        return;
+      }
+      await logAntiBot('signup', { username, user_id: newUser.id, note: 'ok' });
       await finishLogin(newUser);
     } else {
       const { data: user } = await sb.from('users').select('*').ilike('username', username).maybeSingle();
