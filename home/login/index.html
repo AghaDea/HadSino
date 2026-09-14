@@ -987,13 +987,11 @@ function goHome(){
     var path = location.pathname || '/';
     if (/\/index\.html$/i.test(path)) path = path.replace(/\/index\.html$/i, '/');
     else if (!path.endsWith('/')) path = path + '/';
-    // /REPO/home/login/ → /REPO/home/
-    var parts = path.replace(/\/+$/,'').split('/');
-    parts.pop(); // remove login
-    var homePath = parts.join('/') + '/';
-    location.replace(homePath);
+    // /REPO/home/login/ → /REPO/home/app/
+    path = path.replace(/\/login\/$/, '/');
+    location.replace(path + 'app/');
   } catch (e) {
-    location.replace('../');
+    location.replace('../app/');
   }
 }
 
