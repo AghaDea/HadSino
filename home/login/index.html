@@ -782,36 +782,48 @@ html[data-theme="light"] #userModal .section-title{color:var(--text) !important;
 body{min-height:100vh;}
 .auth-wrap{min-height:100vh;}
 
-/* Verify code (CAPTCHA) */
+/* Slider puzzle CAPTCHA */
 .verify-wrap{margin:12px 0 4px;}
 .verify-wrap label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;font-weight:600;}
-.verify-row{display:flex;gap:8px;align-items:stretch;}
-.verify-code{
-  flex:0 0 auto;min-width:110px;padding:0 12px;
-  display:flex;align-items:center;justify-content:center;
-  font-family:ui-monospace,monospace;font-size:20px;font-weight:800;
-  letter-spacing:4px;border-radius:10px;cursor:pointer;user-select:none;
-  background:linear-gradient(135deg,#1a1d24,#0d0f12);
-  border:1px solid var(--border);color:#7dd3fc;
-  text-decoration:line-through;text-decoration-color:rgba(125,211,252,.35);
-  position:relative;overflow:hidden;
+.puzzle-wrap{width:100%;user-select:none;-webkit-user-select:none;touch-action:none;}
+.puzzle-board{
+  position:relative;width:100%;height:190px;overflow:hidden;border:1px solid var(--border);
+  border-radius:12px;background:#0a0c0f;
 }
-.verify-code::before{
-  content:'';position:absolute;inset:0;
-  background:repeating-linear-gradient(-12deg,transparent,transparent 6px,rgba(255,255,255,.04) 6px,rgba(255,255,255,.04) 7px);
-  pointer-events:none;
+.puzzle-board canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+.puzzle-piece{
+  position:absolute;width:58px;height:58px;left:0;top:0;z-index:2;
+  border:2px solid rgba(255,255,255,.92);border-radius:7px;
+  box-shadow:0 4px 14px rgba(0,0,0,.45);pointer-events:none;
+  background-repeat:no-repeat;
 }
-.verify-code:hover{border-color:var(--accent);}
-.verify-code .v-hint{display:none;}
-.verify-input{
-  flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
-  border-radius:10px;padding:10px 12px;font-size:15px;letter-spacing:2px;
-  font-family:ui-monospace,monospace;text-transform:uppercase;
+.puzzle-target{
+  position:absolute;width:58px;height:58px;z-index:1;
+  border:2px dashed rgba(255,255,255,.8);border-radius:7px;
+  background:rgba(0,0,0,.18);pointer-events:none;
 }
-html[data-theme="light"] .verify-code{
-  background:linear-gradient(135deg,#e8eef5,#f7f9fb);color:#0369a1;
-  text-decoration-color:rgba(3,105,161,.3);
+.puzzle-slider{
+  position:relative;height:48px;margin-top:8px;border:1px solid var(--border);
+  border-radius:999px;background:var(--bg);overflow:hidden;touch-action:none;
 }
+.puzzle-slider-track{
+  position:absolute;left:5px;right:5px;top:50%;height:6px;transform:translateY(-50%);
+  border-radius:999px;background:var(--border);
+}
+.puzzle-slider-handle{
+  position:absolute;top:50%;left:5px;width:40px;height:40px;transform:translateY(-50%);
+  border-radius:50%;border:1px solid var(--border);background:var(--accent);
+  color:#fff;display:flex;align-items:center;justify-content:center;
+  font-weight:900;font-size:17px;box-shadow:0 2px 10px rgba(0,0,0,.35);
+  touch-action:none;cursor:grab;z-index:3;
+}
+.puzzle-slider-handle:active{cursor:grabbing;}
+.puzzle-status{text-align:center;font-size:12px;color:var(--text-dim);margin-top:6px;min-height:18px;}
+.puzzle-status.ok{color:var(--green);}
+.puzzle-status.bad{color:var(--red);}
+.puzzle-confirm{margin-top:7px;}
+html[data-theme="light"] .puzzle-board{background:#f7f9fb;}
+html[data-theme="light"] .puzzle-slider{background:#fff;}
 
 .hp-field{position:absolute;left:-9999px;top:-9999px;height:0;width:0;opacity:0;overflow:hidden;pointer-events:none;}
 </style>
@@ -835,10 +847,19 @@ html[data-theme="light"] .verify-code{
       <div class="field"><label>Username</label><input id="authUsername" maxlength="16" placeholder="2 to 16 characters" autocomplete="username"></div>
       <div class="field"><label>Password</label><input id="authPassword" type="password" maxlength="15" placeholder="3 to 15 characters" autocomplete="current-password"></div>
       <div class="verify-wrap">
-        <label>Verify code · click code to refresh</label>
-        <div class="verify-row">
-          <div class="verify-code" id="verifyCodeBox" title="Click to refresh" role="button" tabindex="0">----</div>
-          <input class="verify-input" id="verifyCodeInput" maxlength="6" placeholder="Code" autocomplete="off" inputmode="text" spellcheck="false">
+        <label>Slide the piece into the missing spot, then press Confirm</label>
+        <div class="puzzle-wrap" id="puzzleCaptcha">
+          <div class="puzzle-board" id="puzzleBoard">
+            <canvas id="puzzleCanvas"></canvas>
+            <div class="puzzle-target" id="puzzleTarget"></div>
+            <div class="puzzle-piece" id="puzzlePiece"></div>
+          </div>
+          <div class="puzzle-slider" id="puzzleSlider">
+            <div class="puzzle-slider-track"></div>
+            <div class="puzzle-slider-handle" id="puzzleHandle" role="slider" aria-label="Move puzzle piece">↔</div>
+          </div>
+          <div class="puzzle-status" id="puzzleStatus"></div>
+          <button type="button" class="btn btn-ghost puzzle-confirm" id="puzzleConfirmBtn">Confirm</button>
         </div>
       </div>
       <button class="btn btn-primary" id="authSubmitBtn">Log In</button>
@@ -859,8 +880,8 @@ html[data-theme="light"] .verify-code{
 </div>
 
 <script>
-const SUPABASE_URL = "";
-const SUPABASE_ANON_KEY = "";
+const SUPABASE_URL = "https://qgdyocpjsarcaqpkjtft.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_YBNy37JACMiuRa8xRylNeQ_OgxU_L-U";
 let sb = null;
 try {
   if (SUPABASE_URL && !SUPABASE_URL.includes("YOUR-PROJECT") && SUPABASE_URL.length > 8 && SUPABASE_ANON_KEY) {
@@ -1067,33 +1088,186 @@ async function finishLogin(user){
 }
 
 
-/* ---------- Verify code ---------- */
-let VERIFY_CODE = '';
-function generateVerifyCode(){
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I,O,0,1
-  let s = '';
-  for(let i=0;i<5;i++) s += chars[Math.floor(Math.random()*chars.length)];
-  VERIFY_CODE = s;
-  const box = $('verifyCodeBox');
-  if(box){
-    box.textContent = s;
-    // random slight style variation
-    const rot = (Math.random()*8-4).toFixed(1);
-    box.style.transform = 'rotate('+rot+'deg)';
-    const hues = ['#7dd3fc','#a5b4fc','#86efac','#f9a8d4','#fcd34d'];
-    box.style.color = hues[Math.floor(Math.random()*hues.length)];
-  }
-  const inp = $('verifyCodeInput');
-  if(inp){ inp.value = ''; }
-  return s;
-}
-function checkVerifyCode(){
-  const inp = ($('verifyCodeInput') && $('verifyCodeInput').value || '').trim().toUpperCase();
-  if(!inp) return 'Enter the verify code';
-  if(inp !== VERIFY_CODE) return 'Verify code is incorrect';
-  return null;
+/* ---------- Slider puzzle CAPTCHA ---------- */
+let PUZZLE = {
+  solved: false,
+  dragging: false,
+  targetX: 0,
+  pieceX: 0,
+  pieceY: 0,
+  pieceSize: 58,
+  boardW: 0,
+  boardH: 190,
+  maxX: 0
+};
+
+function puzzleRand(min, max){
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function puzzleSetStatus(text, type=''){
+  const el = $('puzzleStatus');
+  if(!el) return;
+  el.textContent = text || '';
+  el.className = 'puzzle-status' + (type ? ' ' + type : '');
+}
+
+function puzzleMakeImage(){
+  const board = $('puzzleBoard');
+  const canvas = $('puzzleCanvas');
+  const piece = $('puzzlePiece');
+  const target = $('puzzleTarget');
+  if(!board || !canvas || !piece || !target) return;
+
+  const rect = board.getBoundingClientRect();
+  PUZZLE.boardW = Math.max(280, Math.round(rect.width));
+  PUZZLE.boardH = Math.max(160, Math.round(rect.height));
+  canvas.width = PUZZLE.boardW;
+  canvas.height = PUZZLE.boardH;
+
+  const ctx = canvas.getContext('2d');
+  const w = PUZZLE.boardW, h = PUZZLE.boardH;
+  const palettes = [
+    ['#12304a','#6b2f8a','#d16b35'],
+    ['#0c4a5a','#166534','#a16207'],
+    ['#172554','#7e22ce','#be185d'],
+    ['#1f2937','#0f766e','#ca8a04'],
+    ['#3f1d38','#1e40af','#0f766e']
+  ];
+  const p = palettes[puzzleRand(0, palettes.length-1)];
+  const g = ctx.createLinearGradient(0,0,w,h);
+  g.addColorStop(0,p[0]); g.addColorStop(.5,p[1]); g.addColorStop(1,p[2]);
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,w,h);
+
+  for(let i=0;i<18;i++){
+    ctx.beginPath();
+    ctx.arc(puzzleRand(-40,w+40), puzzleRand(-20,h+20), puzzleRand(12,48), 0, Math.PI*2);
+    ctx.fillStyle = `hsla(${puzzleRand(0,360)},80%,70%,${(Math.random()*.16+.06).toFixed(2)})`;
+    ctx.fill();
+  }
+
+  for(let i=0;i<9;i++){
+    ctx.save();
+    ctx.translate(puzzleRand(0,w), puzzleRand(0,h));
+    ctx.rotate((Math.random()-.5)*1.2);
+    ctx.fillStyle = `rgba(255,255,255,${(Math.random()*.13+.05).toFixed(2)})`;
+    ctx.fillRect(-puzzleRand(20,70),-2,puzzleRand(40,140),4);
+    ctx.restore();
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,.72)';
+  ctx.font = '700 16px system-ui,sans-serif';
+  ctx.fillText('PUZZLE', 12, h-14);
+
+  const s = PUZZLE.pieceSize;
+  const minTarget = 95;
+  const maxTarget = Math.max(minTarget, w - s - 12);
+  PUZZLE.targetX = puzzleRand(minTarget, maxTarget);
+  PUZZLE.pieceY = puzzleRand(18, Math.max(18, h - s - 18));
+  PUZZLE.pieceX = 5;
+  PUZZLE.maxX = Math.max(0, w - s - 5);
+
+  const bg = canvas.toDataURL('image/png');
+  piece.style.width = s+'px';
+  piece.style.height = s+'px';
+  target.style.width = s+'px';
+  target.style.height = s+'px';
+  target.style.left = PUZZLE.targetX+'px';
+  target.style.top = PUZZLE.pieceY+'px';
+  piece.style.left = PUZZLE.pieceX+'px';
+  piece.style.top = PUZZLE.pieceY+'px';
+  piece.style.backgroundImage = `url("${bg}")`;
+  piece.style.backgroundSize = `${w}px ${h}px`;
+  piece.style.backgroundPosition = `${-PUZZLE.targetX}px ${-PUZZLE.pieceY}px`;
+
+  const handle = $('puzzleHandle');
+  if(handle) handle.style.left = '5px';
+  PUZZLE.solved = false;
+  puzzleSetStatus('Move the piece to the outlined spot.');
+}
+
+function puzzleSetX(x){
+  const piece = $('puzzlePiece');
+  const handle = $('puzzleHandle');
+  const slider = $('puzzleSlider');
+  if(!piece || !handle || !slider) return;
+
+  const sliderW = slider.clientWidth;
+  const handleW = handle.offsetWidth || 40;
+  const maxHandleX = Math.max(0, sliderW - handleW - 5);
+  const ratio = PUZZLE.maxX > 0 ? Math.min(1, Math.max(0, x / PUZZLE.maxX)) : 0;
+  const handleX = 5 + ratio * maxHandleX;
+  PUZZLE.pieceX = Math.min(PUZZLE.maxX, Math.max(0, x));
+  piece.style.left = PUZZLE.pieceX+'px';
+  handle.style.left = handleX+'px';
+}
+
+function puzzleClientToX(clientX){
+  const slider = $('puzzleSlider');
+  const handle = $('puzzleHandle');
+  if(!slider) return 0;
+  const r = slider.getBoundingClientRect();
+  const hw = handle ? (handle.offsetWidth || 40) : 40;
+  const maxHandleX = Math.max(1, r.width - hw - 10);
+  const px = Math.min(maxHandleX, Math.max(0, clientX - r.left - hw/2 - 5));
+  return (px / maxHandleX) * PUZZLE.maxX;
+}
+
+function puzzlePointerDown(e){
+  if(PUZZLE.solved) return;
+  PUZZLE.dragging = true;
+  const handle = $('puzzleHandle');
+  if(handle && e.pointerId != null) handle.setPointerCapture?.(e.pointerId);
+  e.preventDefault();
+}
+
+function puzzlePointerMove(e){
+  if(!PUZZLE.dragging || PUZZLE.solved) return;
+  puzzleSetX(puzzleClientToX(e.clientX));
+  e.preventDefault();
+}
+
+function puzzlePointerUp(){
+  PUZZLE.dragging = false;
+}
+
+function checkPuzzleCaptcha(){
+  const distance = Math.abs(PUZZLE.pieceX - PUZZLE.targetX);
+  if(distance <= 7){
+    PUZZLE.solved = true;
+    puzzleSetX(PUZZLE.targetX);
+    puzzleSetStatus('Puzzle verified ✓','ok');
+    return null;
+  }
+  PUZZLE.solved = false;
+  puzzleSetStatus('Incorrect position. Move the piece into the outlined spot.','bad');
+  return 'Puzzle verification failed';
+}
+
+function resetPuzzleCaptcha(){
+  puzzleMakeImage();
+}
+
+(function bindPuzzleUI(){
+  const handle = $('puzzleHandle');
+  const slider = $('puzzleSlider');
+  const confirm = $('puzzleConfirmBtn');
+  if(handle && slider && !handle._bound){
+    handle._bound = true;
+    handle.addEventListener('pointerdown', puzzlePointerDown);
+    slider.addEventListener('pointermove', puzzlePointerMove);
+    slider.addEventListener('pointerup', puzzlePointerUp);
+    slider.addEventListener('pointercancel', puzzlePointerUp);
+    slider.addEventListener('lostpointercapture', puzzlePointerUp);
+  }
+  if(confirm && !confirm._bound){
+    confirm._bound = true;
+    confirm.addEventListener('click', checkPuzzleCaptcha);
+  }
+  window.addEventListener('resize', ()=>{ if($('puzzleCaptcha')) resetPuzzleCaptcha(); });
+  setTimeout(resetPuzzleCaptcha, 0);
+})();
 
 /* ---------- Anti-bot ---------- */
 const AUTH_OPENED_AT = Date.now();
@@ -1199,7 +1373,7 @@ async function submitAuth(){
   errBox.classList.add('hidden');
   const uErr = validateUsername(username); if(uErr){ errBox.textContent=uErr; errBox.classList.remove('hidden'); return; }
   const pErr = validatePassword(password); if(pErr){ errBox.textContent=pErr; errBox.classList.remove('hidden'); return; }
-  const vErr = checkVerifyCode(); if(vErr){ errBox.textContent=vErr; errBox.classList.remove('hidden'); generateVerifyCode(); return; }
+  const vErr = checkPuzzleCaptcha(); if(vErr){ errBox.textContent=vErr; errBox.classList.remove('hidden'); return; }
   if(!sb){ errBox.textContent='Database not connected — set SUPABASE_URL and KEY in index.html and home.html'; errBox.classList.remove('hidden'); return; }
 
   $('authSubmitBtn').disabled = true;
@@ -1289,16 +1463,6 @@ async function boot(){
     showAuth('login');
   }
 }
-
-(function bindVerifyUI(){
-  const box = $('verifyCodeBox');
-  if(box && !box._bound){
-    box._bound = true;
-    box.addEventListener('click', ()=> generateVerifyCode());
-    box.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); generateVerifyCode(); }});
-  }
-  generateVerifyCode();
-})();
 
 boot();
 </script>
