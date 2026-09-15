@@ -708,6 +708,18 @@ html[data-theme="light"] .reply-bar{background:#fff;}
   border-bottom:1px solid var(--border);font-size:13px;
 }
 .clan-member-row:last-child{border-bottom:none;}
+.clan-member-row{position:relative;}
+.clan-member-actions{position:relative;display:flex;align-items:center;flex-shrink:0;}
+.clan-more-btn{width:32px;height:32px;border:0;background:transparent;color:var(--text-dim);border-radius:50%;font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;}
+.clan-more-btn:hover{background:rgba(255,255,255,.07);color:var(--text);}
+.clan-action-menu{position:absolute;right:0;top:36px;z-index:20;min-width:150px;background:var(--bg-elev);border:1px solid var(--border);border-radius:12px;padding:5px;box-shadow:var(--shadow);}
+.clan-action-menu.hidden{display:none;}
+.clan-action-menu button,.clan-action-menu select{width:100%;border:0;border-radius:8px;background:transparent;color:var(--text);padding:9px 10px;text-align:left;font-size:12px;font-weight:700;}
+.clan-action-menu button:hover{background:rgba(255,255,255,.06);}
+.clan-action-menu .danger{color:var(--red);}
+.clan-action-menu .rank-select{border:1px solid var(--border);background:var(--bg);margin-bottom:4px;}
+html[data-theme="light"] .clan-more-btn:hover,
+html[data-theme="light"] .clan-action-menu button:hover{background:#f0f2f5;}
 .clan-color-swatch{
   width:22px;height:22px;border-radius:6px;border:1px solid var(--border);
   display:inline-block;vertical-align:middle;cursor:pointer;
@@ -1006,7 +1018,6 @@ nav.tabbar .tab-badge.hide{display:none;}
         <div id="myClanCard" class="my-rank-card hidden" style="cursor:pointer;"></div>
         <div style="padding:8px 16px;display:flex;gap:8px;">
           <button class="btn btn-ghost" id="clanCreateBtn" style="flex:1;margin:0;">Create clan</button>
-          <button class="btn btn-ghost" id="clanManageBtn" style="flex:1;margin:0;display:none;">Manage my clan</button>
         </div>
         <div class="card" style="padding:4px 0;"><div id="clansPageList"></div></div>
       </section>
@@ -2456,7 +2467,6 @@ async function loadClansPage(){
 
   // My clan card
   const card = $('myClanCard');
-  const manageBtn = $('clanManageBtn');
   const createBtn = $('clanCreateBtn');
   if(MY_CLAN && MY_CLAN.clan){
     const mc = MY_CLAN.clan;
@@ -2470,11 +2480,9 @@ async function loadClansPage(){
         Rank <b>#${rank>=0?rank+1:'—'}</b> · Lv <b>${live.level||1}</b> · <b>${(live.xp||0).toLocaleString()}</b> XP · ${live.member_count||0}/${live.max_members||12} · ${live.glory||0} 🏅`;
       card.onclick = ()=> openClanPublicDetail(live);
     }
-    if(manageBtn){ manageBtn.style.display = ''; }
     if(createBtn){ createBtn.style.display = 'none'; }
   } else {
     if(card) card.classList.add('hidden');
-    if(manageBtn) manageBtn.style.display = 'none';
     if(createBtn){
       if(canCreateClan()){
         createBtn.style.display = '';
@@ -3087,6 +3095,7 @@ $('chatSearch').oninput = ()=>{ clearTimeout(chatSearchTimer); chatSearchTimer =
 
 async function loadChatUsers(){
   const list = $('chatUserList');
+  ensureChatRealtime();
   list.innerHTML = inlineLoadingHtml('Loading users');
   await loadUnreadCounts();
   const search = $('chatSearch').value.trim();
@@ -3216,7 +3225,7 @@ function ensureUserRealtime(){
 function ensureChatRealtime(){
   if(chatChannelSubscribed || !sb) return;
   sb.channel('messages-realtime')
-    .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' }, payload=>{
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:'receiver_id=eq.'+CURRENT_USER.id }, payload=>{
       const m = payload.new;
       if(m.sender_id === CURRENT_USER.id) return;
       if(m.receiver_id !== CURRENT_USER.id) return;
@@ -3231,7 +3240,14 @@ function ensureChatRealtime(){
         const badge = document.getElementById('unreadBadge-'+m.sender_id);
         if(badge){ badge.textContent = unreadCounts[m.sender_id]; badge.classList.remove('hide'); }
         updateChatTabBadge();
-        // subtle notify when user is elsewhere in app
+
+        // Keep the chat list live without reloading the whole page.
+        const senderRow = badge ? badge.closest('.lb-row') : null;
+        const chatList = $('chatUserList');
+        if(senderRow && chatList && chatList.firstElementChild !== senderRow){
+          chatList.insertBefore(senderRow, chatList.firstElementChild);
+        }
+
         if(document.visibilityState === 'visible'){
           toast('💬 New message');
         }
@@ -4084,7 +4100,6 @@ async function refreshClanProfileUI(){
       <span style="font-size:11px;">Max one clan per account. Leader can kick members, transfer ownership, or disband.</span>
     </div>`;
     if($('clanCreateBtn')) $('clanCreateBtn').style.display = '';
-    if($('clanManageBtn')) $('clanManageBtn').style.display = 'none';
     return;
   }
   const c = MY_CLAN.clan;
@@ -4106,7 +4121,6 @@ async function refreshClanProfileUI(){
     </div>
     <div style="font-size:12px;color:var(--text-dim);margin-top:6px;">${escapeHtml(c.description||'')}</div>`;
   if($('clanCreateBtn')) $('clanCreateBtn').style.display = 'none';
-  if($('clanManageBtn')) $('clanManageBtn').style.display = '';
 }
 
 function openClanCreate(edit){
@@ -4620,7 +4634,6 @@ async function renderClanManage(){
 setTimeout(()=>{
   if($('clanCreateBtn')) $('clanCreateBtn').onclick = ()=> openClanCreate(false);
   if($('clanBrowseBtn')) $('clanBrowseBtn').onclick = ()=> openClanBrowse();
-  if($('clanManageBtn')) $('clanManageBtn').onclick = ()=> openClanManage();
   if($('clansPageSearch') && !$('clansPageSearch')._bound){
     $('clansPageSearch')._bound = true;
     $('clansPageSearch').oninput = ()=>{ clearTimeout(clansSearchTimer); clansSearchTimer = setTimeout(()=> loadClansPage(), 280); };
@@ -5016,6 +5029,14 @@ async function openClanPublicDetail(clan){
   body.innerHTML = inlineLoadingHtml('Loading');
   const { data: fresh } = await sb.from('clans').select('*').eq('id', clan.id).maybeSingle();
   const c = fresh || clan;
+  try{ await loadMyClan(true); }catch(e){}
+  const inThis = MY_CLAN && MY_CLAN.clan && MY_CLAN.clan.id === c.id;
+  const myRank = inThis ? memberRank(MY_CLAN) : 0;
+  const isLeader = inThis && myRank >= 6;
+  const canKick = inThis && myClanPerm('kick');
+  const canEdit = inThis && myClanPerm('edit');
+  const canRanks = inThis && myClanPerm('manage_ranks');
+  const canAccept = inThis && myClanPerm('accept_requests');
   $('clanManageTitle').textContent = '['+String(c.tag||'').toUpperCase()+'] '+c.name;
   const { data: members } = await sb.from('clan_members').select('*').eq('clan_id', c.id).order('rank',{ascending:false}).order('joined_at',{ascending:true});
   const uids = (members||[]).map(m=>m.user_id);
@@ -5064,13 +5085,26 @@ async function openClanPublicDetail(clan){
     const rk = memberRank(m);
     const rTitle = rankTitle(c, rk);
     const rCol = rankColor(c, rk);
+    const canKickThis = canKick && m.user_id !== CURRENT_USER.id && rk < 6 && (isLeader || rk < myRank);
+    const canSetRank = isLeader && m.user_id !== CURRENT_USER.id && rk < 6;
+    const canTransfer = isLeader && m.user_id !== CURRENT_USER.id && rk < 6;
+    const hasActions = canKickThis || canSetRank || canTransfer;
     html += `<div class="clan-member-row">
       <div class="avatar sm" id="pubAv-${m.user_id}" style="width:28px;height:28px;font-size:11px;"></div>
-      <div style="flex:1;min-width:0;font-weight:700;">@${escapeHtml(u.username)}</div>
-      <div style="text-align:right;flex-shrink:0;">
-        <div style="font-size:11px;font-weight:800;color:${escapeHtml(rCol)};">R${rk} · ${escapeHtml(rTitle)}</div>
-        <div style="font-size:10px;color:var(--text-dim);">Lv ${u.level||1}</div>
+      <div style="flex:1;min-width:0;font-weight:700;">@${escapeHtml(u.username)}
+        <div style="font-size:10px;color:var(--text-dim);margin-top:2px;">Lv ${u.level||1} · <span style="color:${escapeHtml(rCol)};font-weight:800;">R${rk} · ${escapeHtml(rTitle)}</span></div>
       </div>
+      ${hasActions?`<div class="clan-member-actions">
+        <button type="button" class="clan-more-btn" data-clan-menu="${m.user_id}" aria-label="Member actions">⋯</button>
+        <div class="clan-action-menu hidden" id="clanMenu-${m.user_id}">
+          ${canSetRank?`<div style="font-size:10px;color:var(--text-dim);padding:5px 8px 3px;">🎖️ Set rank</div>
+          <select class="rank-select" data-clan-act="setrank" data-uid="${m.user_id}" data-uname="${escapeHtml(u.username)}">
+            ${[1,2,3,4,5].map(n=>`<option value="${n}" ${rk===n?'selected':''}>R${n} · ${escapeHtml(rankTitle(c,n))}</option>`).join('')}
+          </select>`:''}
+          ${canTransfer?`<button type="button" data-clan-act="transfer" data-uid="${m.user_id}" data-uname="${escapeHtml(u.username)}">👑 Transfer leadership</button>`:''}
+          ${canKickThis?`<button type="button" class="danger" data-clan-act="kick" data-uid="${m.user_id}" data-uname="${escapeHtml(u.username)}">🦶 Kick</button>`:''}
+        </div>
+      </div>`:''}
     </div>`;
   });
   if(!(members||[]).length) html += `<div class="empty-note" style="padding:16px;">No members</div>`;
@@ -5088,17 +5122,43 @@ async function openClanPublicDetail(clan){
   html += `</div>`;
 
   html += `<div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">`;
-  const inThis = MY_CLAN && MY_CLAN.clan && MY_CLAN.clan.id === c.id;
-  if(inThis){
-    html += `<button class="btn btn-ghost" id="clanOpenManageFromPublic" style="margin:0;">Manage my clan</button>`;
-  } else if(!MY_CLAN){
+  if(!inThis && !MY_CLAN){
     if(c.is_open){
       html += `<button class="btn btn-primary" id="clanJoinOpenBtn" style="margin:0;">Join clan</button>`;
     } else {
       html += `<button class="btn btn-primary" id="clanRequestBtn" style="margin:0;">Request to join</button>`;
     }
-  } else {
+  } else if(!inThis && MY_CLAN){
     html += `<div style="font-size:12px;color:var(--text-dim);text-align:center;">Leave your current clan to join another</div>`;
+  }
+  if(inThis && canRanks){
+    html += `<div class="section-title" style="border:none;padding:12px 0 6px;margin:0;font-size:14px;">🎖️ Ranks setup (1–5)</div>
+      <p style="font-size:11px;color:var(--text-dim);margin:0 0 8px;">Rank 6 is Leader (fixed). Set title, color & permissions for ranks 1–5.</p>
+      <div id="publicRankEditBox">`;
+    for(let n=1;n<=5;n++){
+      const info=ranksCfg[String(n)], perms=info.perms||{};
+      html += `<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;">
+        <div style="font-weight:800;margin-bottom:6px;">Rank ${n}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+          <input data-public-rank-title="${n}" value="${escapeHtml(info.title)}" maxlength="16" placeholder="Title" style="flex:1;min-width:100px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:8px;font-size:12px;">
+          <input data-public-rank-color="${n}" value="${escapeHtml(info.color)}" maxlength="16" placeholder="#hex" style="width:90px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:8px;font-size:12px;font-family:monospace;">
+        </div>
+        <label style="font-size:11px;margin-right:8px;"><input type="checkbox" data-public-rank-perm="${n}" data-perm="invite" ${perms.invite?'checked':''}> Invite</label>
+        <label style="font-size:11px;margin-right:8px;"><input type="checkbox" data-public-rank-perm="${n}" data-perm="kick" ${perms.kick?'checked':''}> Kick</label>
+        <label style="font-size:11px;margin-right:8px;"><input type="checkbox" data-public-rank-perm="${n}" data-perm="accept_requests" ${perms.accept_requests?'checked':''}> Accept req</label>
+        <label style="font-size:11px;margin-right:8px;"><input type="checkbox" data-public-rank-perm="${n}" data-perm="edit" ${perms.edit?'checked':''}> Edit clan</label>
+      </div>`;
+    }
+    html += `<button class="btn btn-primary" id="publicSaveRanksBtn" style="margin:0;">Save ranks</button></div>`;
+  }
+  if(inThis){
+    if(canEdit) html += `<button class="btn btn-ghost" id="clanEditBtn" style="margin:0;">✏️ Edit name / tag / color</button>`;
+    if(isLeader){
+      html += `<button class="btn btn-ghost" id="clanTransferSelfBtn" style="margin:0;">👑 Transfer leadership</button>`;
+      html += `<button class="btn btn-primary" id="clanDisbandBtn" style="margin:0;background:var(--red);">🗑️ Disband clan</button>`;
+    } else {
+      html += `<button class="btn btn-primary" id="clanLeaveBtn" style="margin:0;background:var(--orange);">🚪 Leave clan</button>`;
+    }
   }
   if(isStaff() && hasPerm('ban') && !inThis){
     html += `<button class="btn btn-ghost" id="clanAdminForceDisband" style="margin:0;color:var(--red);">Admin: disband clan</button>`;
@@ -5110,9 +5170,125 @@ async function openClanPublicDetail(clan){
     const el = document.getElementById('pubAv-'+m.user_id);
     if(el && u) renderAvatar(el, u);
   });
-  if($('clanOpenManageFromPublic')) $('clanOpenManageFromPublic').onclick = ()=> openClanManage();
+  body.querySelectorAll('[data-clan-menu]').forEach(btn=>{
+    btn.onclick = (e)=>{
+      e.stopPropagation();
+      body.querySelectorAll('.clan-action-menu').forEach(menu=>{
+        if(menu.id !== 'clanMenu-'+btn.dataset.clanMenu) menu.classList.add('hidden');
+      });
+      const menu = $('clanMenu-'+btn.dataset.clanMenu);
+      if(menu) menu.classList.toggle('hidden');
+    };
+  });
+  body.querySelectorAll('[data-clan-act]').forEach(el=>{
+    el.onclick = async (e)=>{
+      e.stopPropagation();
+      const act = el.dataset.clanAct;
+      const uid = el.dataset.uid;
+      const uname = el.dataset.uname || '';
+      if(act === 'setrank'){
+        const newRank = Number(el.value);
+        if(!isLeader || newRank < 1 || newRank > 5) return;
+        const { error } = await sb.from('clan_members').update({ rank:newRank, role:newRank>=5?'officer':'member' }).eq('clan_id',c.id).eq('user_id',uid);
+        if(error){ toast(error.message||'Failed'); return; }
+        await logClanHistory(c.id,'set_rank',{target_user_id:uid,target_username:uname,details:{rank:newRank}});
+        try{ await pushNotification(uid,'clan_rank','Clan rank updated','Your rank in '+c.name+' is now R'+newRank,{clan_id:c.id,rank:newRank}); }catch(e){}
+        toast('🎖️ Rank updated');
+        openClanPublicDetail(c);
+        return;
+      }
+      if(act === 'transfer'){
+        if(!isLeader || uid === CURRENT_USER.id) return;
+        if(!(await askConfirm('Transfer leadership','Make @'+uname+' the new leader?'))) return;
+        const { error:e1 } = await sb.from('clan_members').update({rank:6,role:'leader'}).eq('clan_id',c.id).eq('user_id',uid);
+        if(e1){ toast(e1.message||'Failed'); return; }
+        const { error:e2 } = await sb.from('clan_members').update({rank:5,role:'officer'}).eq('clan_id',c.id).eq('user_id',CURRENT_USER.id);
+        if(e2){ toast(e2.message||'Failed'); return; }
+        await logClanHistory(c.id,'transfer_leadership',{target_user_id:uid,target_username:uname});
+        try{ await pushNotification(uid,'clan_leader','You are the new clan leader','You are now the leader of '+c.name,{clan_id:c.id}); }catch(e){}
+        toast('👑 Leadership transferred');
+        await loadMyClan(true);
+        openClanPublicDetail(c);
+        return;
+      }
+      if(act === 'kick'){
+        if(!canKick || uid === CURRENT_USER.id) return;
+        const targetRow = (members||[]).find(x=>x.user_id===uid);
+        const targetRank = targetRow ? memberRank(targetRow) : 0;
+        if(targetRank >= 6 || (!isLeader && targetRank >= myRank)) return;
+        if(!(await askConfirm('Kick','Remove @'+uname+' from the clan?'))) return;
+        const { error } = await sb.from('clan_members').delete().eq('clan_id',c.id).eq('user_id',uid);
+        if(error){ toast(error.message||'Failed'); return; }
+        await logClanHistory(c.id,'kick',{target_user_id:uid,target_username:uname});
+        try{ await pushNotification(uid,'clan_kicked','Removed from clan','You were removed from '+c.name,{clan_id:c.id}); }catch(e){}
+        toast('🦶 Member kicked');
+        openClanPublicDetail(c);
+      }
+    };
+  });
+  document.addEventListener('click', window.__clanMenuOutsideHandler = function(e){
+    if(!body.contains(e.target)) return;
+    if(e.target.closest && e.target.closest('.clan-more-btn')) return;
+    body.querySelectorAll('.clan-action-menu').forEach(menu=>menu.classList.add('hidden'));
+  }, {once:true});
   if($('clanJoinOpenBtn')) $('clanJoinOpenBtn').onclick = async ()=>{ await joinOrRequestClan(c); openClanPublicDetail(c); };
   if($('clanRequestBtn')) $('clanRequestBtn').onclick = async ()=>{ await joinOrRequestClan(c); };
+  if($('clanEditBtn')) $('clanEditBtn').onclick = ()=>{ closeClanManage(); openClanCreate(true); };
+  if($('clanLeaveBtn')) $('clanLeaveBtn').onclick = async ()=>{
+    if(!(await askConfirm('Leave','Leave this clan?'))) return;
+    const { error } = await sb.from('clan_members').delete().eq('clan_id',c.id).eq('user_id',CURRENT_USER.id);
+    if(error){ toast(error.message||'Failed'); return; }
+    await logClanHistory(c.id,'leave',{target_user_id:CURRENT_USER.id,target_username:CURRENT_USER.username});
+    MY_CLAN=null; CURRENT_USER.clan_tag=null; CURRENT_USER.clan_color=null; CURRENT_USER.clan_id=null;
+    toast('🚪 Left clan'); closeClanManage();
+    try{ refreshGameUI(); refreshProfileUI(); }catch(e){}
+  };
+  if($('clanDisbandBtn')) $('clanDisbandBtn').onclick = async ()=>{
+    if(!(await askConfirm('Disband','Permanently delete this clan?'))) return;
+    await logClanHistory(c.id,'disband',{});
+    await sb.from('clan_join_requests').delete().eq('clan_id',c.id);
+    await sb.from('clan_invites').delete().eq('clan_id',c.id);
+    await sb.from('clan_history').delete().eq('clan_id',c.id);
+    await sb.from('clan_members').delete().eq('clan_id',c.id);
+    const { error } = await sb.from('clans').delete().eq('id',c.id);
+    if(error){ toast(error.message||'Failed'); return; }
+    MY_CLAN=null; toast('🗑️ Clan disbanded'); closeClanManage();
+    if($('pageClans') && !$('pageClans').classList.contains('hidden')) loadClansPage();
+  };
+  if($('clanTransferSelfBtn')) $('clanTransferSelfBtn').onclick = async ()=>{
+    const name = prompt('Username of new leader (must be a member):');
+    if(!name) return;
+    const { data: targetU } = await sb.from('users').select('id,username').ilike('username',name.trim()).limit(1).maybeSingle();
+    if(!targetU){ toast('User not found'); return; }
+    if(targetU.id===CURRENT_USER.id){ toast('Already leader'); return; }
+    const mem=(members||[]).find(x=>x.user_id===targetU.id);
+    if(!mem){ toast('That user is not in this clan'); return; }
+    if(!(await askConfirm('Transfer','Make @'+targetU.username+' the new leader?'))) return;
+    await sb.from('clan_members').update({rank:6,role:'leader'}).eq('clan_id',c.id).eq('user_id',targetU.id);
+    await sb.from('clan_members').update({rank:5,role:'officer'}).eq('clan_id',c.id).eq('user_id',CURRENT_USER.id);
+    await logClanHistory(c.id,'transfer_leadership',{target_user_id:targetU.id,target_username:targetU.username});
+    toast('👑 Leadership transferred');
+    await loadMyClan(true); openClanPublicDetail(c);
+  };
+  if($('publicSaveRanksBtn')) $('publicSaveRanksBtn').onclick = async ()=>{
+    const cfg = getClanRanksConfig(c);
+    for(let n=1;n<=5;n++){
+      const titleEl=body.querySelector(`[data-public-rank-title="${n}"]`);
+      const colorEl=body.querySelector(`[data-public-rank-color="${n}"]`);
+      const title=(titleEl && titleEl.value.trim()) || DEFAULT_RANKS[String(n)].title;
+      const color=normalizeHexColor(colorEl && colorEl.value) || DEFAULT_RANKS[String(n)].color;
+      const perms={invite:false,kick:false,edit:false,manage_ranks:false,accept_requests:false};
+      body.querySelectorAll(`[data-public-rank-perm="${n}"]`).forEach(cb=>{ perms[cb.dataset.perm]=!!cb.checked; });
+      perms.manage_ranks=false;
+      cfg[String(n)]={title:title.slice(0,16),color,perms};
+    }
+    const {error}=await sb.from('clans').update({ranks_config:cfg,updated_at:new Date().toISOString()}).eq('id',c.id);
+    if(error){toast(error.message||'Failed');return;}
+    await logClanHistory(c.id,'edit_ranks',{details:{ranks:Object.keys(cfg)}});
+    toast('🎖️ Ranks saved');
+    await loadMyClan(true);
+    openClanPublicDetail(c);
+  };
   if($('clanAdminForceDisband')) $('clanAdminForceDisband').onclick = async ()=>{
     if(!(await askConfirm('Disband','Admin: permanently delete this clan?'))) return;
     await sb.from('clan_join_requests').delete().eq('clan_id', c.id);
