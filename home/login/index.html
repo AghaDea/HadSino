@@ -800,6 +800,10 @@ body{min-height:100vh;}
       <div id="authError" class="err-msg hidden"></div>
       <div class="field"><label>Username</label><input id="authUsername" maxlength="16" placeholder="2 to 16 characters" autocomplete="username"></div>
       <div class="field"><label>Password</label><input id="authPassword" type="password" maxlength="15" placeholder="3 to 15 characters" autocomplete="current-password"></div>
+      <div style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;" aria-hidden="true" tabindex="-1">
+        <label for="authWebsite">Website</label>
+        <input id="authWebsite" name="website" type="text" tabindex="-1" autocomplete="off">
+      </div>
       <div class="verify-wrap">
         <label>Slide the piece into the matching cutout</label>
         <div class="puzzle-wrap" id="puzzleCaptcha"><div class="puzzle-board" id="puzzleBoard"><canvas id="puzzleCanvas"></canvas><div class="puzzle-target" id="puzzleTarget"></div><div class="puzzle-piece" id="puzzlePiece"></div></div><div class="puzzle-hint">Drag the piece with your finger</div><div class="puzzle-status" id="puzzleStatus"></div></div>
@@ -1049,16 +1053,16 @@ async function finishLogin(user){
 
 
 /* ---------- Compact drag puzzle CAPTCHA ---------- */
-let PUZZLE={x:0,y:0,targetX:0,targetY:0,size:42,drag:false,offX:0,offY:0,solved:false,started:0,moved:0};
+let PUZZLE={x:0,y:0,targetX:0,targetY:0,size:42,drag:false,offX:0,offY:0,solved:false,started:0,moved:0,moveEvents:0,lastX:0,lastY:0,dirChanges:0,lastDir:0};
 function puzzleRand(a,b){return Math.floor(Math.random()*(b-a+1))+a}function puzzleStatus(t,c=''){const e=$('puzzleStatus');if(e){e.textContent=t||'';e.className='puzzle-status'+(c?' '+c:'')}}
-function puzzleMakeImage(){const b=$('puzzleBoard'),c=$('puzzleCanvas'),p=$('puzzlePiece'),t=$('puzzleTarget');if(!b||!c||!p||!t)return;const w=Math.max(220,b.clientWidth),h=118,s=42;c.width=w*2;c.height=h*2;const x=c.getContext('2d');x.setTransform(2,0,0,2,0,0);const palettes=[['#172554','#0f766e','#7c3aed'],['#3f1d2e','#164e63','#854d0e'],['#172033','#3f6212','#7e22ce'],['#1e293b','#075985','#9f1239']];const q=palettes[Math.floor(Math.random()*palettes.length)],g=x.createLinearGradient(0,0,w,h);g.addColorStop(0,q[0]);g.addColorStop(.5,q[1]);g.addColorStop(1,q[2]);x.fillStyle=g;x.fillRect(0,0,w,h);for(let i=0;i<45;i++){x.fillStyle='rgba(255,255,255,'+(Math.random()*.07)+')';x.beginPath();x.arc(Math.random()*w,Math.random()*h,2+Math.random()*16,0,Math.PI*2);x.fill()}const minX=8,maxX=Math.max(8,w-s-8),minY=8,maxY=Math.max(8,h-s-8);PUZZLE.targetX=puzzleRand(minX,maxX);PUZZLE.targetY=puzzleRand(minY,maxY);let px=puzzleRand(minX,maxX),py=puzzleRand(minY,maxY);for(let i=0;i<10&&Math.hypot(px-PUZZLE.targetX,py-PUZZLE.targetY)<70;i++){px=puzzleRand(minX,maxX);py=puzzleRand(minY,maxY)}PUZZLE.x=px;PUZZLE.y=py;PUZZLE.solved=false;PUZZLE.drag=false;PUZZLE.started=0;PUZZLE.moved=0;t.style.left=PUZZLE.targetX+'px';t.style.top=PUZZLE.targetY+'px';const o=document.createElement('canvas');o.width=s;o.height=s;o.getContext('2d').drawImage(c,PUZZLE.targetX*2,PUZZLE.targetY*2,s*2,s*2,0,0,s,s);p.style.width=s+'px';p.style.height=s+'px';p.style.backgroundImage='url('+o.toDataURL('image/png')+')';p.style.top=py+'px';puzzleSetX(px);puzzleStatus('')}
+function puzzleMakeImage(){const b=$('puzzleBoard'),c=$('puzzleCanvas'),p=$('puzzlePiece'),t=$('puzzleTarget');if(!b||!c||!p||!t)return;const w=Math.max(220,b.clientWidth),h=118,s=puzzleRand(38,48);PUZZLE.size=s;c.width=w*2;c.height=h*2;const x=c.getContext('2d');x.setTransform(2,0,0,2,0,0);const palettes=[['#172554','#0f766e','#7c3aed'],['#3f1d2e','#164e63','#854d0e'],['#172033','#3f6212','#7e22ce'],['#1e293b','#075985','#9f1239']];const q=palettes[Math.floor(Math.random()*palettes.length)],g=x.createLinearGradient(0,0,w,h);g.addColorStop(0,q[0]);g.addColorStop(.5,q[1]);g.addColorStop(1,q[2]);x.fillStyle=g;x.fillRect(0,0,w,h);for(let i=0;i<45;i++){x.fillStyle='rgba(255,255,255,'+(Math.random()*.07)+')';x.beginPath();x.arc(Math.random()*w,Math.random()*h,2+Math.random()*16,0,Math.PI*2);x.fill()}const minX=8,maxX=Math.max(8,w-s-8),minY=8,maxY=Math.max(8,h-s-8);PUZZLE.targetX=puzzleRand(minX,maxX);PUZZLE.targetY=puzzleRand(minY,maxY);let px=puzzleRand(minX,maxX),py=puzzleRand(minY,maxY);for(let i=0;i<10&&Math.hypot(px-PUZZLE.targetX,py-PUZZLE.targetY)<70;i++){px=puzzleRand(minX,maxX);py=puzzleRand(minY,maxY)}PUZZLE.x=px;PUZZLE.y=py;PUZZLE.solved=false;PUZZLE.drag=false;PUZZLE.started=0;PUZZLE.moved=0;PUZZLE.moveEvents=0;PUZZLE.dirChanges=0;PUZZLE.lastDir=0;PUZZLE.lastX=px;PUZZLE.lastY=py;t.style.left=PUZZLE.targetX+'px';t.style.top=PUZZLE.targetY+'px';const o=document.createElement('canvas');o.width=s;o.height=s;o.getContext('2d').drawImage(c,PUZZLE.targetX*2,PUZZLE.targetY*2,s*2,s*2,0,0,s,s);p.style.width=s+'px';p.style.height=s+'px';p.style.backgroundImage='url('+o.toDataURL('image/png')+')';p.style.top=py+'px';puzzleSetX(px);puzzleStatus('')}
 function puzzleSetPos(x,y){const b=$('puzzleBoard'),p=$('puzzlePiece');if(!b||!p)return;const maxX=Math.max(0,b.clientWidth-PUZZLE.size),maxY=Math.max(0,b.clientHeight-PUZZLE.size);PUZZLE.x=Math.max(0,Math.min(maxX,x));PUZZLE.y=Math.max(0,Math.min(maxY,y));p.style.left=PUZZLE.x+'px';p.style.top=PUZZLE.y+'px'}
 function puzzleSetX(v){puzzleSetPos(v,PUZZLE.y)}
-function puzzleDown(e){const p=$('puzzlePiece');if(!p||PUZZLE.solved)return;const r=p.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)return;e.preventDefault();PUZZLE.drag=true;PUZZLE.started=performance.now();PUZZLE.offX=e.clientX-r.left;PUZZLE.offY=e.clientY-r.top;PUZZLE.moved=0;p.classList.add('dragging');try{p.setPointerCapture(e.pointerId)}catch(_){} }
-function puzzleMove(e){if(!PUZZLE.drag)return;e.preventDefault();const r=$('puzzleBoard').getBoundingClientRect(),nx=e.clientX-r.left-PUZZLE.offX,ny=e.clientY-r.top-PUZZLE.offY;PUZZLE.moved+=Math.hypot(nx-PUZZLE.x,ny-PUZZLE.y);puzzleSetPos(nx,ny)}
+function puzzleDown(e){const p=$('puzzlePiece');if(!p||PUZZLE.solved)return;const r=p.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)return;e.preventDefault();PUZZLE.drag=true;PUZZLE.started=performance.now();PUZZLE.offX=e.clientX-r.left;PUZZLE.offY=e.clientY-r.top;PUZZLE.moved=0;PUZZLE.moveEvents=0;PUZZLE.dirChanges=0;PUZZLE.lastDir=0;PUZZLE.lastX=PUZZLE.x;PUZZLE.lastY=PUZZLE.y;p.classList.add('dragging');try{p.setPointerCapture(e.pointerId)}catch(_){} }
+function puzzleMove(e){if(!PUZZLE.drag)return;e.preventDefault();const r=$('puzzleBoard').getBoundingClientRect(),nx=e.clientX-r.left-PUZZLE.offX,ny=e.clientY-r.top-PUZZLE.offY;const dx=nx-PUZZLE.lastX;PUZZLE.moved+=Math.hypot(nx-PUZZLE.x,ny-PUZZLE.y);PUZZLE.moveEvents++;if(Math.abs(dx)>0.4){const dir=dx>0?1:-1;if(PUZZLE.lastDir&&dir!==PUZZLE.lastDir)PUZZLE.dirChanges++;PUZZLE.lastDir=dir}PUZZLE.lastX=nx;PUZZLE.lastY=ny;puzzleSetPos(nx,ny)}
 function puzzleUp(){if(PUZZLE.drag){PUZZLE.drag=false;const p=$('puzzlePiece');if(p)p.classList.remove('dragging')}}
 function resetPuzzleCaptcha(){ puzzleMakeImage(); }
-function checkPuzzleCaptcha(){if(PUZZLE.solved)return null;if(!PUZZLE.started||PUZZLE.moved<12){puzzleStatus('Drag the piece with your finger.','bad');return 'Please complete the puzzle verification'}if(performance.now()-PUZZLE.started<160){puzzleStatus('Please move the piece naturally.','bad');resetPuzzleCaptcha();return 'Please try the puzzle again'}const dx=PUZZLE.x-PUZZLE.targetX,dy=PUZZLE.y-PUZZLE.targetY;if(Math.hypot(dx,dy)<=10){PUZZLE.solved=true;puzzleSetPos(PUZZLE.targetX,PUZZLE.targetY);puzzleStatus('Verified ✓','ok');return null}puzzleStatus('Wrong position — try again.','bad');resetPuzzleCaptcha();return 'Puzzle verification failed — try again'}
+function checkPuzzleCaptcha(){if(PUZZLE.solved)return null;if(!PUZZLE.started||PUZZLE.moved<20||PUZZLE.moveEvents<6){puzzleStatus('Drag the piece with your finger.','bad');return 'Please complete the puzzle verification'}const elapsed=performance.now()-PUZZLE.started;if(elapsed<220||elapsed>60000){puzzleStatus('Please move the piece naturally.','bad');resetPuzzleCaptcha();return 'Please try the puzzle again'}const dx=PUZZLE.x-PUZZLE.targetX,dy=PUZZLE.y-PUZZLE.targetY;if(Math.hypot(dx,dy)<=9){PUZZLE.solved=true;puzzleSetPos(PUZZLE.targetX,PUZZLE.targetY);puzzleStatus('Verified ✓','ok');return null}puzzleStatus('Wrong position — try again.','bad');resetPuzzleCaptcha();return 'Puzzle verification failed — try again'}
 /* ---------- Anti-bot ---------- */
 const AUTH_OPENED_AT = Date.now();
 const MIN_FORM_MS = 2500;
@@ -1077,24 +1081,6 @@ async function logAntiBot(action, details){
       details: Object.assign({ source: 'signup' }, details || {})
     });
   }catch(e){ console.warn('anti_bot log', e); }
-}
-
-async function banDeviceNow(reason){
-  if(!sb || !DEVICE_ID) return;
-  try{
-    await sb.from('banned_devices').upsert({
-      device_id: DEVICE_ID,
-      reason: reason || 'Auto ban: suspicious signup',
-      banned_until: null
-    }, { onConflict: 'device_id' });
-  }catch(e){
-    try{
-      await sb.from('banned_devices').insert({
-        device_id: DEVICE_ID,
-        reason: reason || 'Auto ban: suspicious signup'
-      });
-    }catch(e2){}
-  }
 }
 
 async function deleteUserHard(userId){
@@ -1120,6 +1106,12 @@ async function countDeviceAccounts(){
 }
 
 async function runAntiBotGates(username, isSignup){
+  // 0) honeypot field — only bots fill hidden inputs
+  const hp = $('authWebsite');
+  if(hp && hp.value){
+    await logAntiBot('anti_bot', { username, reason: 'honeypot_filled' });
+    return 'Please try again.';
+  }
   // 1) too fast (bot)
   if(Date.now() - AUTH_OPENED_AT < MIN_FORM_MS){
     await logAntiBot('anti_bot', { username, reason: 'form_too_fast', ms: Date.now()-AUTH_OPENED_AT });
@@ -1136,8 +1128,7 @@ async function runAntiBotGates(username, isSignup){
   if(isSignup){
     const counts = await countDeviceAccounts();
     if(counts.day >= MAX_ACCOUNTS_PER_DEVICE_24H || counts.total >= MAX_ACCOUNTS_PER_DEVICE_TOTAL){
-      await banDeviceNow('Auto ban: mass signup from device');
-      await logAntiBot('anti_bot_ban_device', {
+      await logAntiBot('anti_bot_block_device', {
         username,
         reason: 'mass_signup',
         accounts_24h: counts.day,
@@ -1200,7 +1191,6 @@ async function submitAuth(){
       const counts = await withTimeout(countDeviceAccounts(), 6000);
       if(counts.day > MAX_ACCOUNTS_PER_DEVICE_24H || counts.total > MAX_ACCOUNTS_PER_DEVICE_TOTAL){
         await deleteUserHard(newUser.id);
-        await banDeviceNow('Auto ban: bot mass signup');
         await logAntiBot('anti_bot_delete_user', {username,reason:'post_signup_limit',target_user_id:newUser.id,accounts_24h:counts.day,accounts_total:counts.total});
         errBox.textContent='Registration blocked on this device.';
         errBox.classList.remove('hidden');
